@@ -34,5 +34,5 @@ function setup() {
 
   // draw an outlined ellipse (mouth)
   fill(215, 180, 160);
-  ellipse(width / 2 + 70, height / 2 + 100, 100, 50);
+  ellipse(width / 2 + 70, height / 2 + 110, 100, 70);
 }
