@@ -1,8 +1,29 @@
+/*
+This example combines the KMeans example with the voronoi example
+and adds user input for composition lines and Voronoi point creation
+
+The user can click on the left image to create composition line endpoints
+(2 clicks draw a line from the first click to the second click point)
+
+The user can then toggle the voronoi drawing which will use the 
+composition line endpoints as the centers of the voronoi drawing,
+and segment the drawing based on that.
+
+From the original K-Means example, the user can also adjust the 
+underlying K-Means composition of the drawing, which increases/decreases 
+the number of colors that show up in the modified drawing.
+
+ChatGPT was used, but only for helping write the "mouseClicked" function
+*/
+
+
 let img;
 let outImg;
 let cvReady = false;
-let delaunay, voronoi;
+let voronoi;
 let k = 5; // number of clusters
+let showVoronoi = false;
+let voronoiColors = [];
 
 let lineStart = null;
 let lines = [];
@@ -14,10 +35,10 @@ function onOpenCvReady() {
 }
 
 function clearLines() {
-  // Clear canvas
+  // clear canvas
   clear();
 
-  // Redraw segmented image and original image
+  // redraw segmented image and original image
   if (outImg) {
     image(outImg, 0, 0);
   }
@@ -25,38 +46,39 @@ function clearLines() {
     image(img, img.width, 0);
   }
 
-  // Clear stored lines and reset line start
+  // clear stored lines and reset line start
   lines = [];
   points = [];
   lineStart = null;
 }
 
-function drawVoronoi() {
+function toggleVoronoi() {
+  // hide voronoi but put everything back
+  if (showVoronoi) {
+    showVoronoi = false;
+    image(outImg, 0, 0);
+    image(img, img.width, 0);
+    drawKMeansTextBoxes();
+    drawCompositionLines();
+    return;
+  }
+
   if (points.length < 3) return;
   delaunay = d3.Delaunay.from(points);
   voronoi = delaunay.voronoi([0, 0, img.width, img.height]);
 
-  // draw delunay
-  // stroke(255, 150);
-  // strokeWeight(3);
-  // noFill();
-  // for (let tri of delaunay.trianglePolygons()) {
-  //   beginShape();
-  //   for (let [x, y] of tri) vertex(x, y);
-  //   endShape(CLOSE);
-  // }
-
   // draw voronoi
   stroke(0, 255, 0, 180);
   strokeWeight(3);
-  noFill();
+  i = 0;
   for (let cell of voronoi.cellPolygons()) {
-    print("cell");
+    fill_color = voronoiColors[i];
+    fill(fill_color[0], fill_color[1], fill_color[2], 80);
     beginShape();
     for (let [x, y] of cell) vertex(x, y);
     endShape(CLOSE);
+    i++;
   }
-  print("finished voronoi");
 
   // draw points
   noStroke();
@@ -65,6 +87,7 @@ function drawVoronoi() {
     p = points[i]
     circle(p[0], p[1], 5);
   }
+  showVoronoi = true;
 }
 
 function setup() {
@@ -79,9 +102,17 @@ function setup() {
   clearButton.mousePressed(clearLines);
 
   // Add create delunay/voronoi button from points
-  let drawVoronoiButton = createButton('Draw Voronoi');
+  let drawVoronoiButton = createButton('Toggle Voronoi');
   drawVoronoiButton.position(500, 40);
-  drawVoronoiButton.mousePressed(drawVoronoi);
+  drawVoronoiButton.mousePressed(toggleVoronoi);
+
+  // set some random colors for voronoi segmentation
+  for (i = 0; i < 100; i++) {
+    r = random(255);
+    g = random(255);
+    b = random(255);
+    voronoiColors.push([r, g, b]);
+  }
 }
 
 function mouseClicked() {
@@ -181,23 +212,12 @@ function segmentImage() {
   // Draw the segmented image
   image(outImg, 0, 0);
 
-  // Draw textbox with number of colors (k) on top-left corner of outImg
-  fill(0, 0, 0, 150);
-  noStroke();
-  rect(10, 10, 155, 30, 5);
-  fill(255);
-  textSize(15);
-  textAlign(LEFT, CENTER);
-  text('Number of colors: ' + k, 20, 25);
-
+  // Draw original image for comparison
   image(img, img.width, 0);
 
-  stroke(255);
-  strokeWeight(5);
-  for (i = 0; i < lines.length; i++) {
-    l = lines[i];
-    line(l.start.x, l.start.y, l.end.x, l.end.y);
-  }
+  drawKMeansTextBoxes();
+
+  drawCompositionLines();
 
   // Cleanup
   src.delete(); rgb.delete(); samples.delete();
@@ -205,13 +225,42 @@ function segmentImage() {
   clustered.delete(); dst.delete();
 }
 
+function drawKMeansTextBoxes() {
+  // Draw textbox with number of colors (k) on top-left corner of outImg
+  fill(0, 0, 0, 150);
+  noStroke();
+  rect(10, 10, 155, 30, 5);
+  fill(255);
+  textSize(15);
+  textAlign(LEFT, CENTER);
+  text('# of K-Means colors: ' + k, 20, 25);
+}
+
+function drawCompositionLines() {
+  // Draw composition lines
+  stroke(255);
+  strokeWeight(5);
+  for (i = 0; i < lines.length; i++) {
+    l = lines[i];
+    line(l.start.x, l.start.y, l.end.x, l.end.y);
+  }
+}
+
 function keyPressed() {
   if (key === '+' || key === '=') {
     k++;
-    if (img && cvReady) segmentImage();
+    if (img && cvReady) {
+      segmentImage();
+      showVoronoi = !showVoronoi;
+      toggleVoronoi();
+    }
   } else if (key === '-' && k > 2) {
     k--;
-    if (img && cvReady) segmentImage();
+    if (img && cvReady) {
+      segmentImage();
+      showVoronoi = !showVoronoi;
+      toggleVoronoi();
+    }
   }
 }
 
