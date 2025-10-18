@@ -1,9 +1,12 @@
 class FallingDot {
   constructor(pointRef, dotsize = 6, color = null) {
     this.point = pointRef;         // reference into drawing array
-    this.gravity = 0.5;        // positive -> downward, hardcode/test for now
+    this.gravity = 0.3;        // positive -> downward, hardcode/test for now
+    this.x_accel = random(-0.05, 0.05); // slight horizontal drift  
     this.radius = dotsize / 2;
     this.color = color;
+    this.scale = random(0.8, 1.2); // variety in leaf size
+    this.flip = random([-1, 1]); // so we have some variety in leaves left/right
 
     this.position = createVector(this.point.x, this.point.y);
     this.velocity = createVector(0, 0);
@@ -13,7 +16,8 @@ class FallingDot {
   // simple integrator: v += g ; p += v
   update() {
     // apply constant acceleration (gravity)
-    this.velocity.y += this.gravity;
+    this.velocity.y += this.gravity * random(-0.1, 1.2); // slight variety in fall speed
+    this.velocity.x += this.x_accel;
     this.position.add(this.velocity);
 
     // write back to the referenced point so sketch draws it
@@ -25,6 +29,7 @@ class FallingDot {
   checkEdges() {
     let floorY = height - this.radius;
     if (this.position.y > floorY) {
+      this.velocity.x = 0;
       this.position.y = floorY;
       if (this.bounceDamping > 0) {
         this.velocity.y *= -this.bounceDamping;

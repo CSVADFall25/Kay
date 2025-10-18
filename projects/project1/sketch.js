@@ -6,7 +6,7 @@ let swatchesPerRow = 5; // new: number of columns in the grid
 
 let drawing = [];
 let isDrawing = false;
-let dotSize = 20; // size of each drawn point/dot
+let dotSize = 40; // size of each drawn point/dot
 let dotInterval = 400; // push a dot every dotInterval ms
 
 let paletteData;
@@ -19,7 +19,7 @@ function preload() {
 }
 
 function setup() {
-  createCanvas(800, 800);
+  createCanvas(800, 600);
   colorMode(RGB, 255);
   frameRate(30);
 
@@ -94,15 +94,42 @@ function draw() {
   // }
 
   // Update all FallingDot movers (each operates on its referenced point)
+  noStroke();
   for (let fd of fallingDots) {
     fd.update();
     fd.checkEdges();
-
-    noStroke();
     fill(fd.color);
-    circle(fd.point.x, fd.point.y, dotSize);
+    drawLeaf(fd.point.x, fd.point.y, fd.scale, fd.flip);
   }
 }
+
+function drawLeaf(x, y, leafScale, leafFlip) {
+  // circle(x, y, size); 
+
+  push();
+  translate(x, y);
+  scale(leafScale);
+  scale(leafFlip, 1);
+
+  // bezier vertex syntax
+  // bezierVertex(x2, y2, x3, y3, x4, y4)
+  // x2, y2 and x3, y3 are control points
+  // x4, y4 is the destination vertex
+
+  // draw the leaf shape
+  beginShape();
+
+  // anchor point and bezier vertices
+  vertex(0, 10);
+  bezierVertex(40, -5, 30, 15, 45, 20);
+  bezierVertex(40, 15, 30, 40, 0, 10);
+
+  endShape();
+  endShape(CLOSE);
+
+  pop();
+}
+
 
 function mousePressed() {
   // Check if clicked on any swatch in the grid
