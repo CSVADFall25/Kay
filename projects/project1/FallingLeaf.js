@@ -31,9 +31,22 @@ class FallingLeaf {
   }
 
   // keep inside canvas and stop/bounce at bottom
-  checkEdges() {
+  checkEdges(otherLeaves) {
     if (this.doneFalling) {
       return;
+    }
+
+    for (let leaf of otherLeaves) {
+      if (leaf != this) {
+        let distVec = p5.Vector.sub(this.position, leaf.position);
+        let dist = distVec.mag();
+        let minDist = this.radius * 0.75; // playing around with this for overlap for leaf pile stacking
+        if (dist < minDist && leaf.doneFalling) {
+          this.velocity.y = 0;
+          this.doneFalling = true;
+          return;
+        }
+      }
     }
 
     let floorY = height - this.radius;
