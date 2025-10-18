@@ -97,15 +97,13 @@ function draw() {
   noStroke();
   for (let fd of fallingLeaves) {
     fd.update();
-    fd.checkEdges();
+    fd.checkEdges(fallingLeaves);
     fill(fd.color);
     drawLeaf(fd.point.x, fd.point.y, fd.scale, fd.flip);
   }
 }
 
 function drawLeaf(x, y, leafScale, leafFlip) {
-  // circle(x, y, size); 
-
   push();
   translate(x, y);
   scale(leafScale);
