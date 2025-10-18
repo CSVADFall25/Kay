@@ -1,4 +1,4 @@
-class FallingDot {
+class FallingLeaf {
   constructor(pointRef, dotsize = 6, color = null) {
     this.point = pointRef;         // reference into drawing array
     this.gravity = 0.3;        // positive -> downward, hardcode/test for now
@@ -13,11 +13,10 @@ class FallingDot {
     this.bounceDamping = 0.1;      // 0 = stop at floor, >0 bounce factor
   }
 
-  // simple integrator: v += g ; p += v
   update() {
-    // apply constant acceleration (gravity)
-    this.velocity.y += this.gravity * random(-0.1, 1.2); // slight variety in fall speed
-    this.velocity.x += this.x_accel;
+    // apply acceleration
+    this.velocity.y += this.gravity * random(-0.1, 1.2); // gravity + slight variety in fall speed
+    this.velocity.x += this.x_accel; // horizontal drift
     this.position.add(this.velocity);
 
     // write back to the referenced point so sketch draws it
@@ -39,8 +38,10 @@ class FallingDot {
       this.point.y = this.position.y;
     }
 
-    if (this.position.x < this.radius) {
-      this.position.x = this.radius;
+    // hardcoding these borders for now
+    // todo not hardcode lol
+    if (this.position.x < 230 + this.radius) {
+      this.position.x = 230 + this.radius;
       this.velocity.x *= -1;
       this.point.x = this.position.x;
     } else if (this.position.x > width - this.radius) {

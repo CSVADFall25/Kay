@@ -11,7 +11,7 @@ let dotInterval = 400; // push a dot every dotInterval ms
 
 let paletteData;
 
-let fallingDots = []; // array of FallingDot instances
+let fallingLeaves = []; // array of FallingLeaf instances
 
 function preload() {
   // Load the JSON file that has fall color palette swatch rgbs
@@ -93,9 +93,9 @@ function draw() {
   //   }
   // }
 
-  // Update all FallingDot movers (each operates on its referenced point)
+  // Update all FallingLeaf movers (each operates on its referenced point)
   noStroke();
-  for (let fd of fallingDots) {
+  for (let fd of fallingLeaves) {
     fd.update();
     fd.checkEdges();
     fill(fd.color);
@@ -155,9 +155,9 @@ function mousePressed() {
     let newStroke = { color: colors[selectedIndex], points: [{ x: mouseX, y: mouseY }], lastDot: now };
     drawing.push(newStroke);
 
-    // create a FallingDot for this initial point so it begins falling immediately
-    let fd = new FallingDot(newStroke.points[0], dotSize, colors[selectedIndex]);
-    fallingDots.push(fd);
+    // create a FallingLeaf for this initial point so it begins falling immediately
+    let fd = new FallingLeaf(newStroke.points[0], dotSize, colors[selectedIndex]);
+    fallingLeaves.push(fd);
   }
 }
 
@@ -177,9 +177,9 @@ function mouseDragged() {
         currentStroke.points.push(pt);
         currentStroke.lastDot = now;
 
-        // create a FallingDot for this new point as well
-        let fd = new FallingDot(pt, dotSize, colors[selectedIndex]);
-        fallingDots.push(fd);
+        // create a FallingLeaf for this new point as well
+        let fd = new FallingLeaf(pt, dotSize, colors[selectedIndex]);
+        fallingLeaves.push(fd);
       }
     }
   }
