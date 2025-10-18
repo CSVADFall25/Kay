@@ -2,9 +2,12 @@ let colors = []; // read the json for the fall color palette
 let selectedIndex = 0;
 let swatchSize = 35;
 let swatchMargin = 5;
+let swatchesPerRow = 5; // new: number of columns in the grid
 
 let drawing = [];
 let isDrawing = false;
+let dotSize = 12; // size of each drawn point/dot
+let dotInterval = 400; // push a dot every 1000 ms (1 second)
 
 let paletteData;
 
@@ -29,77 +32,105 @@ function setup() {
   background(255);
 }
 
+// helper to compute swatch position for index based on a grid centered vertically on left
+function getSwatchPos(index) {
+  let cols = swatchesPerRow;
+  let rows = ceil(colors.length / cols);
+  let totalH = rows * swatchSize + max(0, rows - 1) * swatchMargin; // total grid height (no extra outer margin)
+  let startX = swatchMargin;
+  let startY = height / 2 - totalH / 2;
+
+  let row = floor(index / cols);
+  let col = index % cols;
+  let x = startX + col * (swatchSize + swatchMargin);
+  let y = startY + row * (swatchSize + swatchMargin);
+  return { x, y, cols, rows, startX, startY };
+}
+
 function draw() {
   // todo maybe more efficient way than this??
   background(255); // clears canvas each frame
 
-  // Draw color swatches on left
+  // Draw color swatches in a grid on the mid-left
   noStroke();
   for (let i = 0; i < colors.length; i++) {
+    let pos = getSwatchPos(i);
     fill(colors[i]);
-    let x = swatchMargin;
-    let y = swatchMargin + i * (swatchSize + swatchMargin);
-    rect(x, y, swatchSize, swatchSize);
+    rect(pos.x, pos.y, swatchSize, swatchSize);
 
     // todo draw leaves instead of square shapes
-    // drawLeaf(x, y, swatchSize);
+    // drawLeaf(pos.x, pos.y, swatchSize);
 
     if (i === selectedIndex) {
       stroke(0);
       strokeWeight(3);
       noFill();
-      rect(x - 2, y - 2, swatchSize + 4, swatchSize + 4);
+      rect(pos.x - 2, pos.y - 2, swatchSize + 4, swatchSize + 4);
       noStroke();
     }
   }
 
-  // Outline drawing area
+  // Outline drawing area (compute draw area after grid width)
+  let gridInfo = getSwatchPos(0); // contains cols/rows/startX/startY
+  let cols = gridInfo.cols;
+  let totalW = cols * swatchSize + max(0, cols - 1) * swatchMargin;
+  let drawAreaX = gridInfo.startX + totalW + swatchMargin * 2;
+
   stroke(0);
   strokeWeight(2);
   noFill();
-  let drawAreaX = swatchSize + 2 * swatchMargin;
   rect(drawAreaX, 0, width - drawAreaX, height);
 
-  // Draw stored lines
-  // for now, todo full gravity thingy
-  noFill();
+  // Draw stored dots instead of continuous lines
   for (let strokeData of drawing) {
-    stroke(strokeData.color);
-    strokeWeight(10);
-    beginShape();
+    noStroke();
+    fill(strokeData.color);
     for (let pt of strokeData.points) {
-      vertex(pt.x, pt.y);
+      ellipse(pt.x, pt.y, dotSize, dotSize);
     }
-    endShape();
   }
 }
 
 function mousePressed() {
-  // Check if clicked on swatch
+  // Check if clicked on any swatch in the grid
   for (let i = 0; i < colors.length; i++) {
-    let x = swatchMargin;
-    let y = swatchMargin + i * (swatchSize + swatchMargin);
-    if (mouseX >= x && mouseX <= x + swatchSize &&
-        mouseY >= y && mouseY <= y + swatchSize) {
+    let pos = getSwatchPos(i);
+    if (mouseX >= pos.x && mouseX <= pos.x + swatchSize &&
+        mouseY >= pos.y && mouseY <= pos.y + swatchSize) {
       selectedIndex = i;
       return;
     }
   }
 
   // Start drawing if clicked in drawing area
-  let drawAreaX = swatchSize + 3 * swatchMargin;
+  let gridInfo = getSwatchPos(0);
+  let cols = gridInfo.cols;
+  let totalW = cols * swatchSize + max(0, cols - 1) * swatchMargin;
+  let drawAreaX = gridInfo.startX + totalW + swatchMargin * 2;
+
   if (mouseX > drawAreaX) {
     isDrawing = true;
-    drawing.push({ color: colors[selectedIndex], points: [{ x: mouseX, y: mouseY }] });
+    // store lastDot timestamp on the stroke so we can rate-limit dot placement
+    let now = millis();
+    drawing.push({ color: colors[selectedIndex], points: [{ x: mouseX, y: mouseY }], lastDot: now });
   }
 }
 
 function mouseDragged() {
   if (isDrawing) {
-    let drawAreaX = swatchSize + 3 * swatchMargin;
+    let gridInfo = getSwatchPos(0);
+    let cols = gridInfo.cols;
+    let totalW = cols * swatchSize + max(0, cols - 1) * swatchMargin;
+    let drawAreaX = gridInfo.startX + totalW + swatchMargin * 2;
+
     if (mouseX > drawAreaX) {
       let currentStroke = drawing[drawing.length - 1];
-      currentStroke.points.push({ x: mouseX, y: mouseY });
+      // push a dot only once per dotInterval (1 second)
+      let now = millis();
+      if (!currentStroke.lastDot || now - currentStroke.lastDot >= dotInterval) {
+        currentStroke.points.push({ x: mouseX, y: mouseY });
+        currentStroke.lastDot = now;
+      }
     }
   }
 }
@@ -107,5 +138,3 @@ function mouseDragged() {
 function mouseReleased() {
   isDrawing = false;
 }
-
-
