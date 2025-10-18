@@ -6,10 +6,12 @@ let swatchesPerRow = 5; // new: number of columns in the grid
 
 let drawing = [];
 let isDrawing = false;
-let dotSize = 12; // size of each drawn point/dot
-let dotInterval = 400; // push a dot every 1000 ms (1 second)
+let dotSize = 20; // size of each drawn point/dot
+let dotInterval = 400; // push a dot every dotInterval ms
 
 let paletteData;
+
+let fallingDots = []; // array of FallingDot instances
 
 function preload() {
   // Load the JSON file that has fall color palette swatch rgbs
@@ -19,6 +21,7 @@ function preload() {
 function setup() {
   createCanvas(800, 800);
   colorMode(RGB, 255);
+  frameRate(30);
 
   // Extract colors from JSON data
   colors = [];
@@ -82,12 +85,22 @@ function draw() {
   rect(drawAreaX, 0, width - drawAreaX, height);
 
   // Draw stored dots instead of continuous lines
-  for (let strokeData of drawing) {
+  // for (let strokeData of drawing) {
+  //   noStroke();
+  //   fill(strokeData.color);
+  //   for (let pt of strokeData.points) {
+  //     circle(pt.x, pt.y, dotSize);
+  //   }
+  // }
+
+  // Update all FallingDot movers (each operates on its referenced point)
+  for (let fd of fallingDots) {
+    fd.update();
+    fd.checkEdges();
+
     noStroke();
-    fill(strokeData.color);
-    for (let pt of strokeData.points) {
-      ellipse(pt.x, pt.y, dotSize, dotSize);
-    }
+    fill(fd.color);
+    circle(fd.point.x, fd.point.y, dotSize);
   }
 }
 
@@ -112,7 +125,12 @@ function mousePressed() {
     isDrawing = true;
     // store lastDot timestamp on the stroke so we can rate-limit dot placement
     let now = millis();
-    drawing.push({ color: colors[selectedIndex], points: [{ x: mouseX, y: mouseY }], lastDot: now });
+    let newStroke = { color: colors[selectedIndex], points: [{ x: mouseX, y: mouseY }], lastDot: now };
+    drawing.push(newStroke);
+
+    // create a FallingDot for this initial point so it begins falling immediately
+    let fd = new FallingDot(newStroke.points[0], dotSize, colors[selectedIndex]);
+    fallingDots.push(fd);
   }
 }
 
@@ -125,11 +143,16 @@ function mouseDragged() {
 
     if (mouseX > drawAreaX) {
       let currentStroke = drawing[drawing.length - 1];
-      // push a dot only once per dotInterval (1 second)
+      // push a dot only once per dotInterval (ms)
       let now = millis();
       if (!currentStroke.lastDot || now - currentStroke.lastDot >= dotInterval) {
-        currentStroke.points.push({ x: mouseX, y: mouseY });
+        let pt = { x: mouseX, y: mouseY };
+        currentStroke.points.push(pt);
         currentStroke.lastDot = now;
+
+        // create a FallingDot for this new point as well
+        let fd = new FallingDot(pt, dotSize, colors[selectedIndex]);
+        fallingDots.push(fd);
       }
     }
   }
