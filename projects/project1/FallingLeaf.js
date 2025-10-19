@@ -5,7 +5,7 @@ class FallingLeaf {
     this.x_accel = random(-0.05, 0.05); // slight horizontal drift  
     this.radius = dotsize / 2;
     this.color = color;
-    this.scale = random(0.8, 1.2); // variety in leaf size
+    this.scale = random(0.85, 1.3); // variety in leaf size
     this.flip = random([-1, 1]); // so we have some variety in leaves left/right
 
     this.position = createVector(this.point.x, this.point.y);
@@ -40,7 +40,7 @@ class FallingLeaf {
       if (leaf != this) {
         let distVec = p5.Vector.sub(this.position, leaf.position);
         let dist = distVec.mag();
-        let minDist = this.radius * 0.75; // playing around with this for overlap for leaf pile stacking
+        let minDist = this.radius; // playing around with this for overlap for leaf pile stacking
         if (dist < minDist && leaf.doneFalling) {
           this.velocity.y = 0;
           this.doneFalling = true;

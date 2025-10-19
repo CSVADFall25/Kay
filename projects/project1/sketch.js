@@ -11,7 +11,7 @@ let drawing = [];
 let isDrawing = false;
 
 // leaf drawing variables
-let leafSize = 40; // rough size of each drawn leaf
+let leafSize = 35; // rough size of each drawn leaf
 let leafInterval = 200; // push a dot every leafInterval ms
 let fallingLeaves = []; // array of FallingLeaf instances
 
@@ -94,14 +94,14 @@ function draw() {
   for (let i = 0; i < colors.length; i++) {
     let pos = getSwatchPos(i);
     fill(colors[i]);
-    drawLeaf(pos.x, pos.y, 1, 1);
+    drawPaletteLeaf(pos.x, pos.y, 1, 1);
 
     // outline the selected swatch
     if (i === selectedIndex) {
       stroke(colors[selectedIndex]);
       strokeWeight(5);
       noFill();
-      drawLeaf(pos.x - 2, pos.y - 2, 1.1, 1);
+      drawPaletteLeaf(pos.x - 2, pos.y - 2, 1.1, 1);
       noStroke();
     }
   }
@@ -139,7 +139,7 @@ function draw() {
   }
 }
 
-function drawLeaf(x, y, leafScale, leafFlip) {
+function drawPaletteLeaf(x, y, leafScale, leafFlip) {
   push();
   translate(x, y);
   scale(leafScale);
@@ -157,6 +157,27 @@ function drawLeaf(x, y, leafScale, leafFlip) {
   vertex(0, 10);
   bezierVertex(40, -5, 30, 15, 45, 20);
   bezierVertex(40, 15, 30, 40, 0, 10);
+
+  endShape();
+  endShape(CLOSE);
+
+  pop();
+}
+
+// trying to make the overlap better
+function drawLeaf(x, y, leafScale, leafFlip) {
+  push();
+  translate(x, y);
+  scale(leafScale);
+  scale(leafFlip, 1);
+
+  // draw the leaf shape
+  beginShape();
+
+  // anchor point and bezier vertices
+  vertex(-20, 0);
+  bezierVertex(20, -15, 10, 5, 25, 10);
+  bezierVertex(20, 5, 10, 30, -20, 0);
 
   endShape();
   endShape(CLOSE);
