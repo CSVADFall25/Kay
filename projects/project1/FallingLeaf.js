@@ -67,8 +67,8 @@ class FallingLeaf {
     }
     // hardcoding these borders for now
     // todo not hardcode lol
-    if (this.position.x < 230 + this.radius) {
-      this.position.x = 230 + this.radius;
+    if (this.position.x < 260 + this.radius) {
+      this.position.x = 260 + this.radius;
       this.velocity.x *= -1;
       this.point.x = this.position.x;
     } else if (this.position.x > width - this.radius) {
@@ -76,5 +76,13 @@ class FallingLeaf {
       this.velocity.x *= -1;
       this.point.x = this.position.x;
     }
+  }
+
+  // 'cleans' up the leaves by having them fly back up off the screen
+  flyUp() {
+    this.doneFalling = false;
+    this.velocity = createVector(random(-0.2, 0.2), random(-1,-5)); // random velocity for variation
+    this.gravity = -0.5; // fly back up
+    this.x_accel = random(-0.2, 0.2); // some horizontal drift  
   }
 }

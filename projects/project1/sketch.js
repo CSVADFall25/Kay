@@ -44,9 +44,31 @@ function setup() {
   background(255);
 }
 
+let isClearing = false; // flag to indicate fly-up animation in progress
+
 function clearCanvas() {
-  fallingLeaves = [];
-  background(255);
+  if (isClearing) return; // prevent multiple clears during animation
+  if (fallingLeaves.length === 0) {
+    background(255);
+    return;
+  }
+  isClearing = true;
+
+  // Trigger fly-up animation for all leaves
+  for (let fd of fallingLeaves) {
+    fd.flyUp();
+  }
+
+  // Disable drawing user strokes during animation
+  isDrawing = false;
+
+  // After 2 seconds, clear canvas and reset leaves
+  setTimeout(() => {
+    fallingLeaves = [];
+    drawing = [];
+    background(255);
+    isClearing = false;
+  }, 2000);
 }
 
 // helper to compute swatch position for index based on a grid centered vertically on left
@@ -93,9 +115,21 @@ function draw() {
   stroke(colors[selectedIndex]);
   strokeWeight(4);
   noFill();
-  rect(drawAreaX, 0, width - drawAreaX, height);
+  rect(drawAreaX, 2, width - drawAreaX - 4, height - 4);
 
-  // Update all FallingLeaf movers (each operates on its referenced point)
+  // During clearing animation, only update and draw flying leaves, skip user strokes
+  if (isClearing) {
+    noStroke();
+    for (let fd of fallingLeaves) {
+      fd.update();
+      fd.checkEdges(fallingLeaves);
+      fill(fd.color);
+      drawLeaf(fd.point.x, fd.point.y, fd.scale, fd.flip);
+    }
+    return;
+  }
+
+  // Draw user strokes normally
   noStroke();
   for (let fd of fallingLeaves) {
     fd.update();
