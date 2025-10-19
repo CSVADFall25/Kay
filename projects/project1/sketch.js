@@ -1,16 +1,18 @@
-let colors = []; // read the json for the fall color palette
+// color palette swatch grid variables
+let paletteData; // stores json fall color palette data
+let colors = []; // the list of colors from the json
 let selectedIndex = 0;
-let swatchSize = 35;
-let swatchMargin = 5;
-let swatchesPerRow = 5; // new: number of columns in the grid
+let swatchSize = 40;
+let swatchMargin = 10;
+let swatchesPerRow = 5;
 
+// drawing variables
 let drawing = [];
 let isDrawing = false;
-let dotSize = 40; // size of each drawn point/dot
-let dotInterval = 400; // push a dot every dotInterval ms
 
-let paletteData;
-
+// leaf drawing variables
+let leafSize = 40; // rough size of each drawn leaf
+let leafInterval = 200; // push a dot every leafInterval ms
 let fallingLeaves = []; // array of FallingLeaf instances
 
 function preload() {
@@ -19,9 +21,15 @@ function preload() {
 }
 
 function setup() {
-  createCanvas(800, 600);
+  createCanvas(800, 500);
+
+  // clear button
+  let clearButton = createButton('Clear Canvas');
+  clearButton.position(10, 10);
+  clearButton.mousePressed(clearCanvas);
+
   colorMode(RGB, 255);
-  frameRate(30);
+  frameRate(30); // lower frame rate because my computer is weak
 
   // Extract colors from JSON data
   colors = [];
@@ -31,7 +39,13 @@ function setup() {
     }
   }
 
+  // by default, select the 'first' color in the palette
   selectedIndex = 0;
+  background(255);
+}
+
+function clearCanvas() {
+  fallingLeaves = [];
   background(255);
 }
 
@@ -51,7 +65,6 @@ function getSwatchPos(index) {
 }
 
 function draw() {
-  // todo maybe more efficient way than this??
   background(255); // clears canvas each frame
 
   // Draw color swatches in a grid on the mid-left
@@ -59,16 +72,14 @@ function draw() {
   for (let i = 0; i < colors.length; i++) {
     let pos = getSwatchPos(i);
     fill(colors[i]);
-    rect(pos.x, pos.y, swatchSize, swatchSize);
+    drawLeaf(pos.x, pos.y, 1, 1);
 
-    // todo draw leaves instead of square shapes
-    // drawLeaf(pos.x, pos.y, swatchSize);
-
+    // outline the selected swatch
     if (i === selectedIndex) {
-      stroke(0);
-      strokeWeight(3);
+      stroke(colors[selectedIndex]);
+      strokeWeight(5);
       noFill();
-      rect(pos.x - 2, pos.y - 2, swatchSize + 4, swatchSize + 4);
+      drawLeaf(pos.x - 2, pos.y - 2, 1.1, 1);
       noStroke();
     }
   }
@@ -79,19 +90,10 @@ function draw() {
   let totalW = cols * swatchSize + max(0, cols - 1) * swatchMargin;
   let drawAreaX = gridInfo.startX + totalW + swatchMargin * 2;
 
-  stroke(0);
-  strokeWeight(2);
+  stroke(colors[selectedIndex]);
+  strokeWeight(4);
   noFill();
   rect(drawAreaX, 0, width - drawAreaX, height);
-
-  // Draw stored dots instead of continuous lines
-  // for (let strokeData of drawing) {
-  //   noStroke();
-  //   fill(strokeData.color);
-  //   for (let pt of strokeData.points) {
-  //     circle(pt.x, pt.y, dotSize);
-  //   }
-  // }
 
   // Update all FallingLeaf movers (each operates on its referenced point)
   noStroke();
@@ -154,11 +156,12 @@ function mousePressed() {
     drawing.push(newStroke);
 
     // create a FallingLeaf for this initial point so it begins falling immediately
-    let fd = new FallingLeaf(newStroke.points[0], dotSize, colors[selectedIndex]);
+    let fd = new FallingLeaf(newStroke.points[0], leafSize, colors[selectedIndex]);
     fallingLeaves.push(fd);
   }
 }
 
+// dragging the mouse will also spawn falling leaves at intervals
 function mouseDragged() {
   if (isDrawing) {
     let gridInfo = getSwatchPos(0);
@@ -168,15 +171,15 @@ function mouseDragged() {
 
     if (mouseX > drawAreaX) {
       let currentStroke = drawing[drawing.length - 1];
-      // push a dot only once per dotInterval (ms)
+      // push a dot only once per leafInterval (ms)
       let now = millis();
-      if (!currentStroke.lastDot || now - currentStroke.lastDot >= dotInterval) {
+      if (!currentStroke.lastDot || now - currentStroke.lastDot >= leafInterval) {
         let pt = { x: mouseX, y: mouseY };
         currentStroke.points.push(pt);
         currentStroke.lastDot = now;
 
         // create a FallingLeaf for this new point as well
-        let fd = new FallingLeaf(pt, dotSize, colors[selectedIndex]);
+        let fd = new FallingLeaf(pt, leafSize, colors[selectedIndex]);
         fallingLeaves.push(fd);
       }
     }
