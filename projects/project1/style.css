@@ -1,8 +1,20 @@
 html, body {
-  margin: 0;
-  padding: 0;
+  padding: 5px;
 }
 
-canvas {
-  display: block;
+/* button colors picked from the leaf color palette in assets */
+button {
+  background-color: rgba(90, 112, 84, 1);
+  border: none;
+  color: rgba(229, 212, 159, 1); 
+  padding: 10px 10px;
+  text-align: center;
+  font-size: 16px;
+  margin: 5px 5px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+button:hover {
+  background-color: rgba(61, 89, 65, 1); 
 }
