@@ -32,7 +32,7 @@ function setup() {
 
   console.log(table.getRowCount())
   console.log(table.getColumn('Activity Date'))
-  console.log(table.getColumn('Average Speed'))
+  console.log(table.getColumn('Speed'))
   if (!table || table.getRowCount() === 0) {
     console.error("Table is not loaded or empty!");
     return;
@@ -49,7 +49,7 @@ function setup() {
     }
     labels.push(formatDate(activityDate));
     distance.push(float(table.getString(r, 'Distance')));
-    energy.push(float(table.getString(r, 'Average Speed')));
+    energy.push(float(table.getString(r, 'Speed')));
     duration.push(float(table.getString(r, 'Moving Time')));
   }
 
@@ -92,7 +92,6 @@ function drawBarChart(values1, values2, values3, labels) {
   const maxValue1 = max(values1);
   const maxValue2 = max(values2);
   const minValue2 = min(values2);
-  // console.log(maxValue2)
   const maxValue3 = max(values3);
   let preNorm = -1;
   for (let i = 0; i < values1.length; i++) {
@@ -118,11 +117,11 @@ function drawBarChart(values1, values2, values3, labels) {
       // Prepare tooltip content: date + distance, energy, duration
       const dmi = values3[i];
       const mph = values2[i];
-      const hours = values1[i];
+      const min = values1[i];
       const lines = [
         `${labels[i]}`,
         `Distance: ${nf(dmi, 1, 2)} miles`,
-        `Duration: ${nf(hours, 1, 2)} min`,
+        `Duration: ${floor(min)}m ${floor((min - floor(min)) * 60)}s`,
         `Speed: ${round(mph, 2)} mph`,
       ];
 

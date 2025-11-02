@@ -13,16 +13,17 @@ df["Activity Date"] = df["Activity Date"].astype(str) # need it to be str for sk
 # look at running data only
 df = df[df["Activity Type"] == "Run"]
 
+# convert sec to min
+df["Moving Time"] = pd.to_numeric(df["Moving Time"]).divide(60)
+
 # convert km data to mi 
 df["Distance"] = pd.to_numeric(df["Distance"]).multiply(0.621371)
 df["Max Speed"] = pd.to_numeric(df["Max Speed"]).divide(0.621371)
 df["Average Speed"] = pd.to_numeric(df["Average Speed"]).divide(0.621371)
+df["Speed"] =  df["Distance"] / (df["Moving Time"] / 60)
 
 # m to ft
 df["Elevation Gain"] = pd.to_numeric(df["Elevation Gain"]).multiply(3.28084)
-
-# s to min
-df["Moving Time"] = pd.to_numeric(df["Moving Time"]).divide(60)
 
 # round to 3 decimal places
 df = df.round(3)
