@@ -1,5 +1,8 @@
+import re
 import sqlite3
 import pandas as pd
+import csv
+
 pd.set_option('display.max_columns', None)
 
 lib_path = "/Users/KayK/Library/"
@@ -68,10 +71,39 @@ contacts = contacts[[
     "Z_PK_y",
     # "ZUNIQUEID"
 ]]
+
+# Function to standardize phone numbers
+def standardize_phone_number(number):
+    if "(" not in number and "+" in number:
+        # already standardized, just return it
+        return number
+    
+    country_code = number.split("(")[0].strip().replace('+', '')
+    if country_code == '':
+        country_code = '1' # default to US phone #
+    else:
+        number = number.split("(")[-1].strip()
+
+    # Remove all characters except digits
+    cleaned = re.sub(r'[^\d+]', '', number)
+
+    return f"+{country_code}{cleaned}"
+
+contacts['phone_number'] = contacts['ZFULLNUMBER'].apply(standardize_phone_number)
+contacts['ZFIRSTNAME'] = contacts['ZFIRSTNAME'].fillna('')
+contacts['ZLASTNAME'] = contacts['ZLASTNAME'].fillna('')
+contacts['name'] = (contacts['ZFIRSTNAME'] + " " + contacts['ZLASTNAME']).str.strip()
+df_contacts = contacts[[
+    "name",
+    "phone_number",
+    "Z_PK_x",
+    "Z_PK_y"
+]]
+
 print(contacts.head())
 print(len(contacts))
 
-messages = pd.read_sql_query("select * from message order by ROWID desc limit 1000", conn)
+messages = pd.read_sql_query("select * from message order by ROWID desc", conn) # limit 10000
 print(f"{'-' * 20}")
 
 
@@ -84,7 +116,7 @@ merge_level_1 = temp = pd.merge(messages[['text',
                                           'handle_id', 
                                           'date',
                                           'message_id',
-                                          'is_sent',
+                                          #'is_sent', seems to convey same info as 'is_from_me'
                                           'is_from_me',
                                           'is_spam',
                                           'is_emote',
@@ -105,13 +137,15 @@ df_messages = pd.merge(merge_level_1, chat_message_joins[['chat_id', 'message_id
 print(len(df_messages))
 # print(df_messages["text"].value_counts()) # helpful later on for getting common msgs?
 
-# df_messages = df_messages.dropna(subset="text")
-# print(len(df_messages))
+df_messages = df_messages.dropna(subset="text")
+print(len(df_messages))
 
 # Convert nanoseconds to milliseconds (ms precision)
 df_messages['date'] = df_messages['date'].divide(1000000)
 # Convert Apple epoch (2001-01-01) milliseconds timestamp to human-readable datetime in Pacific Time
-df_messages['date'] = pd.to_datetime(df_messages['date'], unit='ms', origin=pd.Timestamp('2001-01-01'))
-df_messages['date'] = df_messages['date'].dt.tz_localize('UTC').dt.tz_convert('America/Los_Angeles').dt.tz_localize(None).round('1s')
+df_messages['date'] = pd.to_datetime(df_messages['date'], unit='ms', origin=pd.Timestamp('2001-01-01')).dt.round('1s')
+df_messages['date'] = df_messages['date'].dt.tz_localize('UTC').dt.tz_convert('America/Los_Angeles').dt.tz_localize(None)
 print(df_messages.head(10))
 
+df_contacts.to_csv("data/contacts.csv",index=False)
+df_messages.to_csv("data/messages.csv",index=False, quoting=csv.QUOTE_ALL)
