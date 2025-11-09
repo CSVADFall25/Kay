@@ -118,7 +118,7 @@ merge_level_1 = temp = pd.merge(messages[['text',
                                           'message_id',
                                           #'is_sent', seems to convey same info as 'is_from_me'
                                           'is_from_me',
-                                          'is_spam',
+                                          #'is_spam', none of these are marked as spam anyway
                                           'is_emote',
                                           'is_audio_message']],  
                                 handles[['handle_id',
