@@ -7,6 +7,7 @@ import pandas as pd
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from collections import Counter
+from urllib.parse import urlparse
 
 pd.set_option('display.max_columns', None)
 
@@ -159,10 +160,52 @@ def text_counter(df):
 
 print(f"{'=' * 20}")
 
-overall_common_word = most_common_words(df[df['is_from_me'] == 1]['text'], get_all=True)
-overall_common_emoji = most_common_emoji(df[df['is_from_me'] == 1]['text'])
+df = df[df['is_from_me'] == 1] # only look at texts i've sent
+
+overall_common_word = most_common_words(df['text'], get_all=True)
+overall_common_emoji = most_common_emoji(df['text'])
 print(f"most_common_words={overall_common_word}, most_common_emoji={overall_common_emoji}")
-text_counter(df[df['is_from_me'] == 1])
+# text_counter(df[df['is_from_me'] == 1])
 
 
-df.to_csv("data/clean_data.csv", index=False, quoting=csv.QUOTE_ALL)
+# df.to_csv("data/clean_data.csv", index=False, quoting=csv.QUOTE_ALL)
+
+# Create a dataframe with only text messages that are links
+# link_pattern = r'(https?://[^\s]+)|(www\.[^\s]+)'
+# df_links = df[df['text'].str.contains('link_pattern, na=False, case=False, regex=True')]
+df_links = df[df['text'].str.contains('http')]
+print(len(df_links))
+
+spotify_df = df[df['text'].str.contains('open.spotify.com')]
+spotify_df[['text']].to_csv("data/spotify_linked.csv", index=False)
+
+# Print the value counts of the base URLs in the text messages that are links
+print("\nValue counts of base URLs in text messages that are links:")
+
+def get_base_url(url):
+    for word in imsg_reaction_words:
+        if word in url.lower():
+            return '' # it's just a reaction to a url, not a url that i sent
+    try:
+        parsed_url = urlparse(url)
+        return parsed_url.netloc.replace('www.', '')
+    except Exception:
+        return url  # fallback to original if parsing fails
+
+# def get_base_url(url):
+#     if "https" in url:
+#         return url.split("https://")[1].split("/")[0]
+#     return url.split("http://")[1].split("/")[0]
+
+base_urls = df_links['text'].apply(get_base_url)
+counts = base_urls.value_counts()
+print(counts)
+
+# Filter out base URLs with count of 1
+filtered_counts = counts[counts > 1]
+
+# Save to CSV
+filtered_counts_df = filtered_counts.reset_index()
+filtered_counts_df.columns = ['base_url', 'count']
+filtered_counts_df = filtered_counts_df[filtered_counts_df['base_url'] != '']
+filtered_counts_df.to_csv("data/websites_linked.csv", index=False)
