@@ -113,11 +113,35 @@ def text_counter(df):
     print("\nTexts sent per year and month:")
     print(monthly_counts)
 
-    # Group by year, month, and day and count texts
-    daily_counts = df.groupby(['year', 'month', 'day']).size()
+    # Group by year, month, and name and count texts
+    daily_counts = df.groupby(['year', 'month', 'name']).size()
     print("\nTexts sent per year, month, and day:")
     print(daily_counts)
     
+    # Month mapping
+    month_names = {
+        1: "January", 2: "February", 3: "March", 4: "April",
+        5: "May", 6: "June", 7: "July", 8: "August",
+        9: "September", 10: "October", 11: "November", 12: "December"
+    }
+    
+    # Convert daily_counts Series to nested dictionary with name/value objects and month names
+    nested_counts = []
+    for year, months in daily_counts.groupby(level=0):
+        year_obj = {"name": str(year), "children": []}
+        for month, days in months.groupby(level=1):
+            month_obj = {"name": month_names.get(month, str(month)), "children": []}
+            for (y, m, day), count in days.items():
+                day_obj = {"name": str(day), "value": int(count)}
+                month_obj["children"].append(day_obj)
+            year_obj["children"].append(month_obj)
+        nested_counts.append(year_obj)
+    
+    # Save nested_counts to JSON file
+    import json
+    with open("data/text_counts.json", "w") as f:
+        json.dump({"name": "lifetime", "children": nested_counts}, f, indent=4)
+        
     # Group by year and get stats
     yearly_groups = df.groupby('year')
     print_group_stats(yearly_groups, "year")
