@@ -136,22 +136,65 @@ async function createWebsitesList() {
   const websitesText = await websitesResponse.text();
   const websitesData = parseCSV(websitesText);
 
-  // Sort websites by count descending and take top 25
+  // Sort websites by count descending and take top 30
   const topWebsites = websitesData
     .map(d => ({ base_url: d.base_url, count: +d.count }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 30);
 
-  // Render websites list
+  // Render websites list as horizontal bar chart
   const websitesList = d3.select('#websites-list');
-  websitesList.selectAll('li').remove();
-  const listItems = websitesList.selectAll('li')
+  websitesList.html(''); // clear existing content
+
+  const width = 300;
+  const barHeight = 20;
+  const margin = { top: 20, right: 30, bottom: 20, left: 150 };
+  const height = barHeight * topWebsites.length + margin.top + margin.bottom;
+
+  const svg = websitesList.append('svg')
+    .attr('width', width)
+    .attr('height', height);
+
+  const x = d3.scaleLinear()
+    .domain([0, d3.max(topWebsites, d => d.count)])
+    .range([0, width - margin.left - margin.right]);
+
+  const y = d3.scaleBand()
+    .domain(topWebsites.map(d => d.base_url))
+    .range([margin.top, height - margin.bottom])
+    .padding(0.1);
+
+  const g = svg.append('g')
+    .attr('transform', `translate(${margin.left},0)`);
+
+  g.selectAll('rect')
     .data(topWebsites)
     .enter()
-    .append('li')
-    .style('padding', '4px 0')
-    .style('cursor', 'pointer')
-    .text(d => `${d.base_url} (${d.count})`);
+    .append('rect')
+    .attr('x', 0)
+    .attr('y', d => y(d.base_url))
+    .attr('width', d => x(d.count))
+    .attr('height', y.bandwidth())
+    .attr('fill', 'steelblue')
+    .style('cursor', 'pointer');
+
+  g.selectAll('text.count')
+    .data(topWebsites)
+    .enter()
+    .append('text')
+    .attr('class', 'count')
+    .attr('x', d => x(d.count) + 5)
+    .attr('y', d => y(d.base_url) + y.bandwidth() / 2)
+    .attr('dy', '0.3em')
+    .text(d => d.count);
+
+  // Add y-axis labels (website names)
+  svg.append('g')
+    .attr('transform', `translate(${margin.left},0)`)
+    .call(d3.axisLeft(y))
+    .selectAll('text')
+    .style('font-size', '12px')
+    .style('cursor', 'pointer');
 
   // Fetch and parse youtube_title_counts.csv
   const youtubeResponse = await fetch('data/youtube_title_counts.csv');
@@ -171,31 +214,67 @@ async function createWebsitesList() {
 
   const dropdown = d3.select('#dropdown-container');
 
-  // Helper to show dropdown list
+  // Helper to show dropdown as horizontal bar chart
   function showDropdown(items, labelKey, labelText) {
     dropdown.style('display', 'block');
     dropdown.html('');
     dropdown.append('h4').text(labelText);
-    const ul = dropdown.append('ul')
-      .style('list-style', 'none')
-      .style('padding-left', '10px')
-      .style('margin-top', '5px');
-    ul.selectAll('li')
+
+    const width = 250;
+    const barHeight = 16;
+    const margin = { top: 12, right: 20, bottom: 20, left: 120 };
+    const height = barHeight * items.length + margin.top + margin.bottom;
+
+    const svg = dropdown.append('svg')
+      .attr('width', width)
+      .attr('height', height);
+
+    const x = d3.scaleLinear()
+      .domain([0, d3.max(items, d => d.count)])
+      .range([0, width - margin.left - margin.right]);
+
+    const y = d3.scaleBand()
+      .domain(items.map(d => d[labelKey]))
+      .range([margin.top, height - margin.bottom])
+      .padding(0.1);
+
+    const g = svg.append('g')
+      .attr('transform', `translate(${margin.left},0)`);
+
+    g.selectAll('rect')
       .data(items)
       .enter()
-      .append('li')
-      .text(d => `${d[labelKey]} (${d.count})`)
-      .style('padding', '2px 0');
+      .append('rect')
+      .attr('x', 0)
+      .attr('y', d => y(d[labelKey]))
+      .attr('width', d => x(d.count))
+      .attr('height', y.bandwidth())
+      .attr('fill', 'orange');
+
+    g.selectAll('text.count')
+      .data(items)
+      .enter()
+      .append('text')
+      .attr('class', 'count')
+      .attr('x', d => x(d.count) + 5)
+      .attr('y', d => y(d[labelKey]) + y.bandwidth() / 2)
+      .attr('dy', '0.35em')
+      .text(d => d.count);
+
+    svg.append('g')
+      .attr('transform', `translate(${margin.left},0)`)
+      .call(d3.axisLeft(y))
+      .selectAll('text')
+      .style('font-size', '12px');
   }
 
   // Helper to hide dropdown
   function hideDropdown() {
-    // dropdown.style('display', 'none');
     dropdown.html('');
   }
 
   // Add mouseover and mouseout handlers for top two sites (YouTube and Spotify)
-  listItems
+  svg.selectAll('rect')
     .on('mouseover', function(event, d) {
       if (d.base_url.includes('youtu')) {
         showDropdown(youtubeData, 'word', 'Most Sent Video Topics');
