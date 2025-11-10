@@ -1,48 +1,3 @@
-//test a d3 example
-function createOldChart() {
-  // Declare the chart dimensions and margins.
-  const width = 640;
-  const height = 400;
-  const marginTop = 20;
-  const marginRight = 20;
-  const marginBottom = 30;
-  const marginLeft = 40;
-
-  // Declare the x (horizontal position) scale.
-  const x = d3.scaleUtc()
-      .domain([new Date("2023-01-01"), new Date("2024-01-01")])
-      .range([marginLeft, width - marginRight]);
-
-  // Declare the y (vertical position) scale.
-  const y = d3.scaleLinear()
-      .domain([0, 100])
-      .range([height - marginBottom, marginTop]);
-
-  // Create the SVG container.
-  const svg = d3.create("svg")
-      .attr("width", width)
-      .attr("height", height);
-
-  // Add the x-axis.
-  svg.append("g")
-      .attr("transform", `translate(0,${height - marginBottom})`)
-      .call(d3.axisBottom(x));
-
-  // Add the y-axis.
-  svg.append("g")
-      .attr("transform", `translate(${marginLeft},0)`)
-      .call(d3.axisLeft(y));
-
-  // Append the SVG to the container div
-  const container = document.getElementById('chart-container');
-  if (container) {
-    container.appendChild(svg.node());
-    console.log("Container element found");
-  } else {
-    console.error("Container element for chart not found");
-  }
-}
-
 async function createChart() {
 
   const response = await fetch("data/text_counts.json");
@@ -159,3 +114,100 @@ createChart().then(svgNode => {
     container.appendChild(svgNode);
   }
 });
+
+
+async function createWebsitesList() {
+  // Helper function to parse CSV text into array of objects
+  function parseCSV(text) {
+    const lines = text.trim().split('\n');
+    const headers = lines[0].split(',');
+    return lines.slice(1).map(line => {
+      const cols = line.split(',');
+      const obj = {};
+      headers.forEach((header, i) => {
+        obj[header] = cols[i];
+      });
+      return obj;
+    });
+  }
+
+  // Fetch and parse websites_linked.csv
+  const websitesResponse = await fetch('data/websites_linked.csv');
+  const websitesText = await websitesResponse.text();
+  const websitesData = parseCSV(websitesText);
+
+  // Sort websites by count descending and take top 25
+  const topWebsites = websitesData
+    .map(d => ({ base_url: d.base_url, count: +d.count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 30);
+
+  // Render websites list
+  const websitesList = d3.select('#websites-list');
+  websitesList.selectAll('li').remove();
+  const listItems = websitesList.selectAll('li')
+    .data(topWebsites)
+    .enter()
+    .append('li')
+    .style('padding', '4px 0')
+    .style('cursor', 'pointer')
+    .text(d => `${d.base_url} (${d.count})`);
+
+  // Fetch and parse youtube_title_counts.csv
+  const youtubeResponse = await fetch('data/youtube_title_counts.csv');
+  const youtubeText = await youtubeResponse.text();
+  const youtubeData = parseCSV(youtubeText)
+    .map(d => ({ word: d.word, count: +d.count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 30);
+
+  // Fetch and parse spotify_artists.csv
+  const spotifyResponse = await fetch('data/spotify_artists.csv');
+  const spotifyText = await spotifyResponse.text();
+  const spotifyData = parseCSV(spotifyText)
+    .map(d => ({ artist: d.artist, count: +d.count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 20);
+
+  const dropdown = d3.select('#dropdown-container');
+
+  // Helper to show dropdown list
+  function showDropdown(items, labelKey, labelText) {
+    dropdown.style('display', 'block');
+    dropdown.html('');
+    dropdown.append('h4').text(labelText);
+    const ul = dropdown.append('ul')
+      .style('list-style', 'none')
+      .style('padding-left', '10px')
+      .style('margin-top', '5px');
+    ul.selectAll('li')
+      .data(items)
+      .enter()
+      .append('li')
+      .text(d => `${d[labelKey]} (${d.count})`)
+      .style('padding', '2px 0');
+  }
+
+  // Helper to hide dropdown
+  function hideDropdown() {
+    // dropdown.style('display', 'none');
+    dropdown.html('');
+  }
+
+  // Add mouseover and mouseout handlers for top two sites (YouTube and Spotify)
+  listItems
+    .on('mouseover', function(event, d) {
+      if (d.base_url.includes('youtu')) {
+        showDropdown(youtubeData, 'word', 'Most Sent Video Topics');
+      } else if (d.base_url.includes('spotify')) {
+        showDropdown(spotifyData, 'artist', 'Most Sent Artists');
+      } else {
+        hideDropdown();
+      }
+    })
+    .on('mouseout', function(event, d) {
+      hideDropdown();
+    });
+}
+
+createWebsitesList();

@@ -1,6 +1,10 @@
 import spotipy
 import pandas as pd
 
+from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
+
+from config import CLIENT_ID, CLIENT_SECRET
+
 spotify_links = pd.read_csv("data/spotify_linked.csv")
 
 # Filter to keep only Spotify track links (exclude playlists and others)
@@ -13,10 +17,6 @@ track_links = [link for link in track_links if is_track_link(link)]
 
 print(f"Found {len(track_links)} track links")
 
-import os
-from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
-
-from config import CLIENT_ID, CLIENT_SECRET
 
 # auth_manager = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
 
@@ -54,12 +54,12 @@ print(f"Processed {len(track_links)} tracks")
 
 # Print artist counts sorted by frequency descending
 print("\nArtist counts across linked tracks:")
-artists = [["artist,count"]]
+artists = []
 for artist, count in sorted(artist_counts.items(), key=lambda x: x[1], reverse=True):
     print(f"{artist}: {count}")
     artists.append([artist, count])
 
-artists_df = pd.DataFrame(artists)
+artists_df = pd.DataFrame(artists, columns=['artist', 'count'])
 artists_df.to_csv("data/spotify_artists.csv",index=False)
 
 
