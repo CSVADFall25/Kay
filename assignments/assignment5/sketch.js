@@ -9,7 +9,7 @@ let sens = 0.33;      // V/g (typical)
 let calibrated = false;
 
 // Game state
-let player, bullets, particles, score, lives, gameOver, shield, dashTimer;
+let player, bullets, particles, pacmen, score, lives, gameOver, shield, dashTimer, bulletsSpawned;
 const W = 900, H = 560;
 const PLAYER_R = 14, BULLET_R = 6, MAX_BULLETS = 8;
 
@@ -34,11 +34,13 @@ function initGame() {
   player = { x: W/2, y: H/2, vx:0, vy:0 };
   bullets = [];
   particles = [];
+  pacmen = [];
   score = 0;
   lives = 3;
   gameOver = false;
   shield = 0;
   dashTimer = 0;
+  BulletsSpawned = false;
 }
 
 async function connectSerial() {
@@ -102,6 +104,11 @@ function calibrateNow() {
   const deltaCountsPerG = (sens / vref) * 1023.0;
   biases.z = latest.az - deltaCountsPerG; // estimate midpoint from +1g
   calibrated = true;
+  // Reset player position and velocity to center after calibration
+  player.x = W / 2;
+  player.y = H / 2;
+  player.vx = 0;
+  player.vy = 0;
   document.getElementById('status').textContent =
     `Calibrated. RAW bias x:${biases.x.toFixed(0)} y:${biases.y.toFixed(0)} z:${biases.z.toFixed(0)}`;
 }
@@ -124,15 +131,18 @@ function draw() {
 
   // Shake to dash (brief invulnerability)
   const accelMag = Math.sqrt(gx*gx + gy*gy + gz*gz);
-  if (accelMag > 1.6 && dashTimer <= 0) {
+  if (accelMag > 1.5 && dashTimer <= 0) {
     shield = 45;
     dashTimer = 120;
-    burst(player.x, player.y, 25);
+    burst(player.x, player.y, gx, gy);
   }
   if (shield > 0) shield--;
   if (dashTimer > 0) dashTimer--;
 
-  if (frameCount % 25 === 0 && bullets.length < MAX_BULLETS) spawnBullet();
+  if (frameCount % 25 === 0 && bullets.length < MAX_BULLETS && !bulletsSpawned) spawnBullet();
+  if (bullets.length >= MAX_BULLETS) {
+    bulletsSpawned = true;
+  }
 
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i];
@@ -144,7 +154,7 @@ function draw() {
     if (d2 < (PLAYER_R + BULLET_R)**2) {
       if (shield <= 0) {
         lives--;
-        burst(player.x, player.y, 18);
+        burst(player.x, player.y, gx, gy);
         shield = 30;
         if (lives <= 0) gameOver = true;
       } else { b.vx *= -1; b.vy *= -1; }
@@ -157,6 +167,33 @@ function draw() {
     p.vx *= 0.98; p.vy *= 0.98;
     p.a -= 6;
     if (p.a <= 0) particles.splice(i, 1);
+  }
+
+  // Update and draw pacmen
+  for (let i = pacmen.length - 1; i >= 0; i--) {
+    const pm = pacmen[i];
+    pm.x += pm.vx;
+    pm.y += pm.vy;
+    pm.mouthTimer++;
+    if (pm.mouthTimer % 20 === 0) pm.mouthOpen = !pm.mouthOpen;
+
+    // Remove pacman if it goes off screen
+    if (pm.x < -pm.r || pm.x > W + pm.r || pm.y < -pm.r || pm.y > H + pm.r) {
+      pacmen.splice(i, 1);
+      continue;
+    }
+
+    // Calculate angle from velocity vector for mouth direction
+    const angle = atan2(pm.vy, pm.vx);
+
+    // Draw pacman shape
+    push();
+    translate(pm.x, pm.y);
+    rotate(angle);
+    fill(255, 255, 0);
+    noStroke();
+    arc(0, 0, pm.r*2, pm.r*2, pm.mouthOpen ? QUARTER_PI : 0, pm.mouthOpen ? TWO_PI - QUARTER_PI : TWO_PI);
+    pop();
   }
 
   if (!gameOver) score++;
@@ -211,12 +248,21 @@ function spawnBullet() {
   bullets.push({ x, y, vx: speed*cos(ang), vy: speed*sin(ang) });
 }
 
-function burst(x, y, n) {
-  for (let i=0;i<n;i++) {
-    const a = random(TWO_PI);
-    const s = random(1,4);
-    particles.push({ x, y, vx:s*cos(a), vy:s*sin(a), r:random(2,5), a:255 });
-  }
+function burst(x, y, gx, gy) {
+  if (!port || !port.readable) return; // Only spawn pacman if serial connected
+  // Spawn a large yellow pacman-shaped object moving opposite to player velocity
+  const speed = 5;
+  const pacman = {
+    x: x,
+    y: y,
+    vx: gx * speed, //player.vx * speed,
+    vy: gy * speed, //player.vy * speed,
+    r: 30,
+    angle: 0,
+    mouthOpen: true,
+    mouthTimer: 0
+  };
+  pacmen.push(pacman);
 }
 
 function drawGameOver() {
