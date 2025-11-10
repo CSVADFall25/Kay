@@ -42,7 +42,7 @@ async function createChart() {
 
   // Append the text labels with background boxes.
   const label = svg.append("g")
-      .style("font", "20px monospace")
+      .style("font", "14px monospace")
       .attr("pointer-events", "none")
       .attr("text-anchor", "middle")
     .selectAll("g")
@@ -51,29 +51,168 @@ async function createChart() {
       .style("fill-opacity", d => d.parent === root ? 1 : 0)
       .style("display", d => d.parent === root ? "inline" : "none");
 
-  label.append("rect")
-      .attr("fill", "#f0f8ff")  // light background color for highlight
-      .attr("rx", 4)  // rounded corners
-      .attr("ry", 4);
+  // Remove existing rect and text appends
+  label.selectAll("rect").remove();
+  label.selectAll("text").remove();
 
+  // Append rect first so it is behind text
+  label.append("rect")
+      .attr("fill", "rgb(79, 161, 101)")  // translucent background color for highlight
+      .attr("fill-opacity", 0.6)
+      .attr("rx", 20)  // rounded corners
+      .attr("ry", 20);
+
+  // Append text after rect
   label.append("text")
-      .style("fill", "#27380b")  // text color
-      .text(d => d.data.name)
-      .each(function() {
-        const textElem = this;
-        const bbox = textElem.getBBox();
-        d3.select(textElem.parentNode).select("rect")
-          .attr("x", bbox.x - 4)
-          .attr("y", bbox.y - 2)
-          .attr("width", bbox.width + 8)
-          .attr("height", bbox.height + 4);
+      .style("fill", "#ffffff")  // text color
+      .each(function(d) {
+        const textElem = d3.select(this);
+        // Compute count for label
+        let count = d.data.value;
+        if (count === undefined) {
+          // Sum descendant leaf values if no direct value
+          count = d.descendants().reduce((sum, node) => {
+            if (!node.children) return sum + (node.data.value || 0);
+            else return sum;
+          }, 0);
+        }
+        // Clear any existing tspans
+        textElem.selectAll("tspan").remove();
+        // Append name tspan
+        textElem.append("tspan")
+          .attr("x", 0)
+          .attr("dy", "0em")
+          .text(d.data.name);
+        // Append count tspan on new line
+        textElem.append("tspan")
+          .attr("x", 0)
+          .attr("dy", "1.2em")
+          .text(`(${count})`);
+
+        // Adjust background rect size after rendering
+        // Calculate width based on text length instead of bbox width
+        const textLabel = d.data.name + ` (${count})`;
+        const charWidth = 7; // approximate width of one character in pixels for monospace 14px font
+        const calculatedWidth = textLabel.length * charWidth;
+        const bbox = this.getBBox();
+        d3.select(this.parentNode).select("rect")
+          .attr("x", bbox.x - (4 * textLabel.length))
+          .attr("y", bbox.y - 20)
+          .attr("width", bbox.width + (8 * textLabel.length)) // add some padding
+          .attr("height", bbox.height + 50);
       });
 
-  // Create the zoom behavior and zoom immediately in to the initial focus node.
-  svg.on("click", (event) => zoom(event, root));
+  // Declare focus and view before usage
   let focus = root;
   let view;
+
+  // Add cumulative counts box group in upper left corner
+  const countsBox = svg.append("g")
+    .attr("class", "counts-box")
+    .attr("transform", `translate(${-width / 2 + 20},${-height / 2 + 20})`);
+
+  countsBox.append("rect")
+    .attr("width", 180)
+    .attr("height", 70)
+    .attr("fill", "#f0f8ff")
+    .attr("stroke", "#27380b")
+    .attr("stroke-width", 1)
+    .attr("rx", 6)
+    .attr("ry", 6);
+
+  const countsText = countsBox.append("text")
+    .attr("x", 10)
+    .attr("y", 20)
+    .style("font", "14px monospace")
+    .style("fill", "#27380b");
+
+  // Function to compute cumulative counts for a node
+  function computeCounts(node) {
+    if (!node) return { Sent: 0, Received: 0 };
+    let counts = { Sent: 0, Received: 0 };
+
+    // Helper recursive function to accumulate counts
+    function accumulate(n) {
+      if (!n.children) {
+        // Leaf node with value
+        if (n.parent && n.parent.data.name === "Sent") {
+          counts.Sent += n.data.value || 0;
+        } else if (n.parent && n.parent.data.name === "Received") {
+          counts.Received += n.data.value || 0;
+        }
+      } else {
+        n.children.forEach(accumulate);
+      }
+    }
+
+    // If node is root "lifetime", accumulate all children
+    if (node.data.name === "lifetime") {
+      node.children.forEach(accumulate);
+    } else if (node.data.name === "Sent" || node.data.name === "Received") {
+      // Accumulate all children of Sent or Received
+      accumulate(node);
+    } else {
+      // For other nodes, find if parent is Sent or Received and accumulate accordingly
+      if (node.parent && node.parent.data.name === "Sent") {
+        counts.Sent = node.data.value || 0;
+      } else if (node.parent && node.parent.data.name === "Received") {
+        counts.Received = node.data.value || 0;
+      } else {
+        // For intermediate nodes, accumulate children
+        accumulate(node);
+      }
+    }
+    return counts;
+  }
+
+  // Function to update counts box text based on current focus
+  function updateCountsBox() {
+    const counts = computeCounts(focus);
+    let textLines = [];
+    if (focus.data.name === "lifetime") {
+      textLines.push(`Sent: ${counts.Sent}`);
+      textLines.push(`Received: ${counts.Received}`);
+    } else if (focus.data.name === "Sent") {
+      textLines.push(`Sent Total: ${counts.Sent}`);
+    } else if (focus.data.name === "Received") {
+      textLines.push(`Received Total: ${counts.Received}`);
+    } else {
+      // Show counts for children if any
+      if (focus.children && focus.children.length > 0) {
+        focus.children.forEach(child => {
+          let val = child.data.value;
+          if (val === undefined) {
+            // Sum children values if no direct value
+            let sum = 0;
+            child.descendants().forEach(d => {
+              if (!d.children) sum += d.data.value || 0;
+            });
+            val = sum;
+          }
+          textLines.push(`${child.data.name}: ${val}`);
+        });
+      } else {
+        // Leaf node
+        textLines.push(`${focus.data.name}: ${focus.data.value || 0}`);
+      }
+    }
+    countsText.text(null);
+    textLines.forEach((line, i) => {
+      countsText.append("tspan")
+        .attr("x", 10)
+        .attr("y", 20 + i * 18)
+        .text(line);
+    });
+  }
+
+  // Initial zoom and counts box update
   zoomTo([focus.x, focus.y, focus.r * 2]);
+  updateCountsBox();
+
+  // Create the zoom behavior and zoom immediately in to the initial focus node.
+  svg.on("click", (event) => {
+    zoom(event, root);
+  });
 
   function zoomTo(v) {
     const k = width / v[2];
@@ -103,6 +242,11 @@ async function createChart() {
         .style("fill-opacity", d => d.parent === focus ? 1 : 0)
         .on("start", function(d) { if (d.parent === focus) this.style.display = "inline"; })
         .on("end", function(d) { if (d.parent !== focus) this.style.display = "none"; });
+
+    // Update counts box on zoom
+    transition.on("end", () => {
+      updateCountsBox();
+    });
   }
 
   return svg.node();

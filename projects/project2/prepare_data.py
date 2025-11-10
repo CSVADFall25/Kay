@@ -24,6 +24,8 @@ dtypes = {
 contacts = pd.read_csv("data/contacts.csv").drop(columns=["Z_PK_x", "Z_PK_y"])
 msgs = pd.read_csv("data/messages.csv", dtype=dtypes).drop(columns=["chat_id", "handle_id"])
 
+contacts['first_name'] = contacts['name'].str.split().str[0].str.split('-').str[0]
+
 print(len(contacts))
 print(len(msgs))
 
@@ -52,34 +54,66 @@ def text_counter(df):
     print("\nTexts sent per year and month:")
     print(monthly_counts)
 
+    # # Group by year, month, and name and count texts
+    # daily_counts = df.groupby(['year', 'month', 'name']).size()
+    # print("\nTexts sent per year, month, and day:")
+    # print(daily_counts)
+    
+    # # Month mapping
+    # month_names = {
+    #     1: "January", 2: "February", 3: "March", 4: "April",
+    #     5: "May", 6: "June", 7: "July", 8: "August",
+    #     9: "September", 10: "October", 11: "November", 12: "December"
+    # }
+    
+    # # Convert daily_counts Series to nested dictionary with name/value objects and month names
+    # nested_counts = []
+    # for year, months in daily_counts.groupby(level=0):
+    #     year_obj = {"name": str(year), "children": []}
+    #     for month, days in months.groupby(level=1):
+    #         month_obj = {"name": month_names.get(month, str(month)), "children": []}
+    #         for (y, m, day), count in days.items():
+    #             day_obj = {"name": str(day), "value": int(count)}
+    #             month_obj["children"].append(day_obj)
+    #         year_obj["children"].append(month_obj)
+    #     nested_counts.append(year_obj)
+
     # Group by year, month, and name and count texts
-    daily_counts = df.groupby(['year', 'month', 'name']).size()
-    print("\nTexts sent per year, month, and day:")
-    print(daily_counts)
+    grouped_counts = df.groupby(['is_from_me', 'year', 'first_name']).size()
+    print("\nTexts sent and received per year and person:")
+    print(grouped_counts)
     
     # Month mapping
-    month_names = {
-        1: "January", 2: "February", 3: "March", 4: "April",
-        5: "May", 6: "June", 7: "July", 8: "August",
-        9: "September", 10: "October", 11: "November", 12: "December"
+    # month_names = {
+    #     1: "January", 2: "February", 3: "March", 4: "April",
+    #     5: "May", 6: "June", 7: "July", 8: "August",
+    #     9: "September", 10: "October", 11: "November", 12: "December"
+    # }
+
+    is_from_me = {
+        1: "Sent", 0: "Received"
     }
     
     # Convert daily_counts Series to nested dictionary with name/value objects and month names
     nested_counts = []
-    for year, months in daily_counts.groupby(level=0):
-        year_obj = {"name": str(year), "children": []}
-        for month, days in months.groupby(level=1):
-            month_obj = {"name": month_names.get(month, str(month)), "children": []}
-            for (y, m, day), count in days.items():
-                day_obj = {"name": str(day), "value": int(count)}
-                month_obj["children"].append(day_obj)
-            year_obj["children"].append(month_obj)
-        nested_counts.append(year_obj)
+    total_value = 0
+    for sent, years in grouped_counts.groupby(level=0):
+        sent_obj = {"name": is_from_me[sent], "children": [], "value": 0}
+        for year, people in years.groupby(level=1):
+            year_obj = {"name": str(year), "children": [], "value": 0}
+            for (s, y, person), count in people.items():
+                person_obj = {"name": person, "value": int(count)}
+                year_obj["children"].append(person_obj)
+                year_obj["value"] += int(count)
+            sent_obj["children"].append(year_obj)
+            sent_obj["value"] += year_obj["value"]
+        nested_counts.append(sent_obj)
+        total_value += sent_obj["value"]
     
     # Save nested_counts to JSON file
     import json
     with open("data/text_counts.json", "w") as f:
-        json.dump({"name": "lifetime", "children": nested_counts}, f, indent=4)
+        json.dump({"name": "lifetime", "children": nested_counts, "value": total_value}, f, indent=4)
         
     # Group by year and get stats
     yearly_groups = df.groupby('year')
@@ -94,7 +128,7 @@ def text_counter(df):
     # print_group_stats(daily_groups, "year-month-day")
 
 
-# text_counter(df)
+text_counter(df)
 
 print(f"{'=' * 20}")
 
