@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MiniAssignment5 — Dodge Game (ADXL335 + p5.js Web Serial)</title>
+
+    <!-- Load p5.js (needs internet). If you're offline, download p5.min.js and use a local <script> instead. -->
+    <script src="libraries/p5.min.js"></script>
+
+    <style>
+      body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+      #toolbar {
+        position: fixed; top: 0; left: 0; right: 0; height: 56px;
+        display: flex; align-items: center; gap: 12px; padding: 0 16px;
+        border-bottom: 1px solid #ddd; background: #fafafa; z-index: 10;
+      }
+      #container { margin-top: 56px; display: flex; justify-content: center; }
+      #status { font-size: 14px; }
+      button { padding: 8px 12px; }
+      .hint { font-size: 12px; opacity: 0.7; }
+    </style>
+  </head>
+  <body>
+    <div id="toolbar">
+      <button id="connectBtn">Connect Serial</button>
+      <button id="calBtn" title="Lay flat, then click">Calibrate</button>
+      <div id="status">Not connected</div>
+      <div class="hint">Tilt to move. Shake to dash.</div>
+    </div>
+
+    <!-- p5 will attach the canvas inside this container -->
+    <div id="container"></div>
+
+    <!-- Your game code -->
+    <script src="sketch.js"></script>
+  </body>
+</html>
