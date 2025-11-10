@@ -9,9 +9,9 @@ let sens = 0.33;      // V/g (typical)
 let calibrated = false;
 
 // Game state
-let player, bullets, particles, pacmen, score, lives, gameOver, shield, dashTimer, bulletsSpawned;
+let player, bullets, pacmen, score, lives, gameOver, shield, attackTimer, bulletsSpawned, gameOverString;
 const W = 900, H = 560;
-const PLAYER_R = 14, BULLET_R = 6, MAX_BULLETS = 8;
+const PLAYER_R = 14, BULLET_R = 6, MAX_BULLETS = 6;
 
 function setup() {
   const c = createCanvas(W, H);
@@ -33,14 +33,14 @@ function setup() {
 function initGame() {
   player = { x: W/2, y: H/2, vx:0, vy:0 };
   bullets = [];
-  particles = [];
   pacmen = [];
   score = 0;
   lives = 3;
   gameOver = false;
+  gameOverString = "Lost";
   shield = 0;
-  dashTimer = 0;
-  BulletsSpawned = false;
+  attackTimer = 0;
+  bulletsSpawned = false;
 }
 
 async function connectSerial() {
@@ -131,13 +131,13 @@ function draw() {
 
   // Shake to dash (brief invulnerability)
   const accelMag = Math.sqrt(gx*gx + gy*gy + gz*gz);
-  if (accelMag > 1.5 && dashTimer <= 0) {
+  if (accelMag > 1.5 && attackTimer <= 0) {
     shield = 45;
-    dashTimer = 120;
+    attackTimer = 120;
     burst(player.x, player.y, gx, gy);
   }
   if (shield > 0) shield--;
-  if (dashTimer > 0) dashTimer--;
+  if (attackTimer > 0) attackTimer--;
 
   if (frameCount % 25 === 0 && bullets.length < MAX_BULLETS && !bulletsSpawned) spawnBullet();
   if (bullets.length >= MAX_BULLETS) {
@@ -156,17 +156,13 @@ function draw() {
         lives--;
         burst(player.x, player.y, gx, gy);
         shield = 30;
-        if (lives <= 0) gameOver = true;
+        if (lives <= 0) {
+          gameOverString = "Lost";
+          console.log("gameover");
+          gameOver = true;
+        }
       } else { b.vx *= -1; b.vy *= -1; }
     }
-  }
-
-  for (let i = particles.length - 1; i >= 0; i--) {
-    const p = particles[i];
-    p.x += p.vx; p.y += p.vy;
-    p.vx *= 0.98; p.vy *= 0.98;
-    p.a -= 6;
-    if (p.a <= 0) particles.splice(i, 1);
   }
 
   // Update and draw pacmen
@@ -196,6 +192,28 @@ function draw() {
     pop();
   }
 
+// Check collision between pacmen and bullets
+for (let i = pacmen.length - 1; i >= 0; i--) {
+  const pm = pacmen[i];
+  for (let j = bullets.length - 1; j >= 0; j--) {
+    const b = bullets[j];
+    const distSq = (pm.x - b.x) * (pm.x - b.x) + (pm.y - b.y) * (pm.y - b.y);
+    const radiusSum = pm.r + BULLET_R;
+    if (distSq < radiusSum * radiusSum) {
+      // Bullet hit by pacman, remove bullet and treat as killed
+      bullets.splice(j, 1);
+      // Check if game over condition should be updated
+      if (bullets.length === 0 && bulletsSpawned === true) {
+        gameOverString = "Won";
+        console.log("gameover");
+        gameOver = true;
+      }
+      // Optionally, you could add score or effects here
+      break; // One bullet can only be removed once
+    }
+  }
+}
+
   if (!gameOver) score++;
 
   noStroke(); fill(250, 90, 90);
@@ -204,12 +222,10 @@ function draw() {
   if (shield > 0) { stroke(255, 230); noFill(); circle(player.x, player.y, (PLAYER_R+6)*2); noStroke(); }
   fill(120, 200, 255); circle(player.x, player.y, PLAYER_R*2);
 
-  for (const p of particles) { fill(255, p.a); circle(p.x, p.y, p.r*2); }
-
   fill(255); textSize(14);
   text(`Score: ${score||0}`, 16, 28);
   text(`Lives: ${lives||3}`, 16, 50);
-  if (dashTimer > 0) text(`Dash CD: ${(dashTimer/60).toFixed(1)}s`, 16, 72);
+  if (attackTimer > 0) text(`Attack Countdown: ${(attackTimer/60).toFixed(1)}s`, 16, 72);
   if (!calibrated) { fill(255, 220); text("Lay flat and click Calibrate for better control.", 16, H - 16); }
   if (gameOver) { drawGameOver(); noLoop(); }
 }
@@ -255,8 +271,8 @@ function burst(x, y, gx, gy) {
   const pacman = {
     x: x,
     y: y,
-    vx: gx * speed, //player.vx * speed,
-    vy: gy * speed, //player.vy * speed,
+    vx: Math.max(player.vx * speed), // Math.max(3, gx * speed)
+    vy: Math.max(player.vy * speed), // Math.max(3, gy * speed)
     r: 30,
     angle: 0,
     mouthOpen: true,
@@ -269,7 +285,8 @@ function drawGameOver() {
   push();
   textAlign(CENTER, CENTER);
   textSize(36); fill(255);
-  text("Game Over", W/2, H/2 - 20);
+  text("You " + gameOverString + "! Game Over", W/2, H/2 - 20);
+  text()
   textSize(18);
   text("Press R to restart", W/2, H/2 + 16);
   pop();
