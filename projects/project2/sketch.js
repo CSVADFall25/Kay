@@ -175,8 +175,16 @@ async function createWebsitesList() {
     .attr('y', d => y(d.base_url))
     .attr('width', d => x(d.count))
     .attr('height', y.bandwidth())
-    .attr('fill', 'steelblue')
-    .style('cursor', 'pointer');
+    .attr('fill', d => {
+      if (d.base_url.includes('spotify')) {
+        return 'orange'; // same as dropdown spotify bars
+      } else if (d.base_url.includes('youtu')) {
+        return 'orange'; // same as dropdown youtube bars
+      } else {
+        return 'steelblue';
+      }
+    })
+    .style('cursor', d => (d.base_url.includes('spotify') || d.base_url.includes('youtu')) ? 'pointer' : 'default');
 
   g.selectAll('text.count')
     .data(topWebsites)
@@ -220,7 +228,7 @@ async function createWebsitesList() {
     dropdown.html('');
     dropdown.append('h4').text(labelText);
 
-    const width = 250;
+    const width = 260;
     const barHeight = 16;
     const margin = { top: 12, right: 20, bottom: 20, left: 120 };
     const height = barHeight * items.length + margin.top + margin.bottom;
