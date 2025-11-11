@@ -1,4 +1,4 @@
-// Dodge Game — ADXL335 -> p5.js over Web Serial (patched)
+// Dodge/Attack Game — ADXL335 -> p5.js over Web Serial (patched)
 var port, reader;
 var latest = { ax:512, ay:512, az:700 };  // expose globally
 window.latest = latest;
