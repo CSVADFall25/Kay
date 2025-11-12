@@ -8,6 +8,7 @@ from nltk.tokenize import word_tokenize
 nlp = spacy.load("en_core_web_sm")
 imsg_reaction_words = ["loved", "liked", "disliked", "laughed", "emphasized", "questioned", "reacted"]
 other_stop_words = ["im", "u", "ill", "na", "ur"]
+other_common_words = ["like", "lol", "lmao", "okay", "oh", "ok", "okie", "yes", "yeah"]
 stop_words = set(stopwords.words('english') + 
                  list(nlp.Defaults.stop_words) + 
                  imsg_reaction_words + 
