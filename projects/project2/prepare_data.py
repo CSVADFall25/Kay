@@ -1,5 +1,6 @@
 import re
 import csv
+import json
 import spacy
 import string
 import pandas as pd
@@ -43,7 +44,7 @@ df['time'] = df['date'].dt.time.astype(str)
 print(df.head())
 
 
-def text_counter(df):
+def text_counter(df, remove_common_words=False):
     # Group by year and count texts
     yearly_counts = df.groupby('year').size()
     print("\nTexts sent per year:")
@@ -104,7 +105,7 @@ def text_counter(df):
             person_obj = {"name": person, "children": [], "value": 0}
             for (y, p, sent), count in sent_received.items():
                 selected_info = df[((df["year"] == year) & (df["first_name"] == person) & (df["is_from_me"] == sent))]
-                common_words = most_common_words(selected_info["text"])
+                common_words = most_common_words(selected_info["text"], remove_common_words=remove_common_words)
                 common_emoji = most_common_emoji(selected_info["text"])
                 sent_received_obj = {"name": is_from_me[sent],
                                      "value": int(count),
@@ -118,8 +119,11 @@ def text_counter(df):
         total_value += year_obj["value"]
     
     # Save nested_counts to JSON file
-    import json
-    with open("data/text_counts.json", "w") as f:
+    if remove_common_words:
+        file_name = "data/text_counts_no_common_words.json"
+    else:
+        file_name = "data/text_counts.json"
+    with open(file_name, "w") as f:
         json.dump({"name": "lifetime", "children": nested_counts, "value": total_value}, f, indent=4)
         
     # Group by year and get stats
@@ -136,6 +140,7 @@ def text_counter(df):
 
 
 text_counter(df)
+text_counter(df, remove_common_words=True)
 
 print(f"{'=' * 20}")
 

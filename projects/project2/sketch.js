@@ -1,6 +1,6 @@
-async function createChart() {
+async function createChart(dataUrl = "data/text_counts.json") {
 
-  const response = await fetch("data/text_counts.json");
+  const response = await fetch(dataUrl);
   const data = await response.json();
 
   // Specify the chart’s dimensions.
@@ -10,7 +10,8 @@ async function createChart() {
   // Create the color scale.
   const color = d3.scaleLinear()
       .domain([0, 5])
-      .range(["hsl(152,80%,80%)", "hsl(228,30%,40%)"])
+      //.range(["hsl(152,80%,80%)", "hsl(228,30%,40%)"])
+      .range(["hsl(0, 0.00%, 100.00%)", "hsl(205, 62.10%, 44.50%)"])
       .interpolate(d3.interpolateHcl);
 
   // Compute the layout.
@@ -29,31 +30,97 @@ async function createChart() {
       .attr("height", height)
       .attr("style", `max-width: 100%; height: auto; display: block; margin: 0 -14px; background: ${color(0)}; cursor: pointer;`);
 
-  // Append the nodes.
+  // Append the nodes - filter out depth 3 (sent/received) nodes
+  const nodeData = root.descendants().slice(1).filter(d => d.depth !== 3);
   const node = svg.append("g")
-    .selectAll("circle")
-    .data(root.descendants().slice(1))
-    .join("circle")
-      .attr("fill", d => d.children ? color(d.depth) : "white")
+    .selectAll("g")
+    .data(nodeData)
+    .join("g")
       .attr("pointer-events", "all")
-      .style("cursor", d => (d.children && d.depth < 2) ? "pointer" : "default")
-      .on("mouseover", function(event, d) {
-        d3.select(this).attr("stroke", "#d6e8b7");
-        // Show common words and emoji in counts box for hovered year (depth 1), person (depth 2), or sent/received node (depth 3)
-        // New hierarchy: Years > Names > Sent/Received
-        if (d.depth === 1 || d.depth === 2 || d.depth === 3) {
+      .style("cursor", d => (d.children && d.depth < 2) ? "pointer" : "default");
+  
+  // Add base circle for all nodes
+  node.append("circle")
+      .attr("cx", 0)
+      .attr("cy", 0)
+      .attr("r", d => d.r)
+      .attr("fill", d => {
+        if (d.depth === 2 && d.children) {
+          // Person nodes will get pie chart coloring, use white as base
+          return "white";
+        }
+        return d.children ? color(d.depth) : "white";
+      })
+      .attr("pointer-events", "all");
+  
+  // Add pie chart arcs for person nodes (depth 2)
+  node.filter(d => d.depth === 2 && d.children && d.children.length > 0)
+    .each(function(d) {
+      const group = d3.select(this);
+      const sentChild = d.children.find(c => c.data.name === "Sent");
+      const receivedChild = d.children.find(c => c.data.name === "Received");
+      
+      if (!sentChild && !receivedChild) return;
+      
+      const sentValue = sentChild ? (sentChild.value || 0) : 0;
+      const receivedValue = receivedChild ? (receivedChild.value || 0) : 0;
+      const total = sentValue + receivedValue;
+      
+      if (total === 0) return;
+      
+      const sentAngle = (sentValue / total) * 2 * Math.PI;
+      const receivedAngle = (receivedValue / total) * 2 * Math.PI;
+      
+      // Create arc generator with fixed radius
+      const radius = d.r;
+      const arc = d3.arc()
+        .innerRadius(0)
+        .outerRadius(radius);
+      
+      // Draw Sent arc (blue) - starts at top (12 o'clock)
+      // Arcs are positioned relative to group (0,0), group transform handles positioning
+      if (sentValue > 0) {
+        group.append("path")
+          .attr("class", "sent-arc")
+          .attr("d", arc({
+            startAngle: -Math.PI / 2,
+            endAngle: -Math.PI / 2 + sentAngle
+          }))
+          .attr("fill", "#1F8AFF");
+      }
+      
+      // Draw Received arc (grey) - continues from Sent
+      if (receivedValue > 0) {
+        group.append("path")
+          .attr("class", "received-arc")
+          .attr("d", arc({
+            startAngle: -Math.PI / 2 + sentAngle,
+            endAngle: -Math.PI / 2 + sentAngle + receivedAngle
+          }))
+          .attr("fill", "#efefef");
+      }
+    });
+  
+  // Add event handlers to node groups
+  node.on("mouseover", function(event, d) {
+        // Add stroke to the circle in this group
+        d3.select(this).select("circle").attr("stroke", "#d6e8b7");
+        // Show common words and emoji in counts box for hovered year (depth 1) or person (depth 2)
+        // New hierarchy: Years > Names > Sent/Received (sent/received not shown as bubbles)
+        if (d.depth === 1 || d.depth === 2) {
           updateCommonBox(d);
         }
       })
       .on("mouseout", function(event, d) {
-        d3.select(this).attr("stroke", null);
+        // Remove stroke from the circle
+        d3.select(this).select("circle").attr("stroke", null);
         // Clear counts box on mouse out
         clearCommonBox();
       })
       .on("click", (event, d) => {
         // Only allow zooming if node has children and is at year level or above (depth < 2)
         // New hierarchy: Years > Names > Sent/Received
-        // Year nodes are at depth 1, person nodes at depth 2, sent/received at depth 3
+        // Year nodes are at depth 1, person nodes at depth 2
         if (d.children && d.depth < 2 && focus !== d) {
           zoom(event, d);
           event.stopPropagation();
@@ -133,8 +200,8 @@ async function createChart() {
 
   countsBox.append("rect")
     .attr("width", 200)
-    .attr("height", 320)
-    .attr("fill", "#f0f8ff")
+    .attr("height", 440)
+    .attr("fill", "#b8e5ff")
     .attr("stroke", "#27380b")
     .attr("stroke-width", 1)
     .attr("rx", 6)
@@ -210,7 +277,59 @@ async function createChart() {
 
     label.attr("transform", d => `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`);
     node.attr("transform", d => `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`);
-    node.attr("r", d => d.r * k);
+    // Update circle radius
+    node.selectAll("circle").attr("r", d => d.r * k);
+    // Update arc paths for person nodes - need to recalculate with new radius
+    node.filter(d => d.depth === 2 && d.children && d.children.length > 0)
+      .each(function(d) {
+        const group = d3.select(this);
+        const sentChild = d.children.find(c => c.data.name === "Sent");
+        const receivedChild = d.children.find(c => c.data.name === "Received");
+        
+        if (!sentChild && !receivedChild) return;
+        
+        const sentValue = sentChild ? (sentChild.value || 0) : 0;
+        const receivedValue = receivedChild ? (receivedChild.value || 0) : 0;
+        const total = sentValue + receivedValue;
+        
+        if (total === 0) return;
+        
+        const sentAngle = (sentValue / total) * 2 * Math.PI;
+        const receivedAngle = (receivedValue / total) * 2 * Math.PI;
+        const radius = d.r * k;
+        
+        const arc = d3.arc()
+          .innerRadius(0)
+          .outerRadius(radius);
+        
+        // Update or create Sent arc
+        let sentPath = group.select("path.sent-arc");
+        if (sentValue > 0) {
+          if (sentPath.empty()) {
+            sentPath = group.append("path").attr("class", "sent-arc").attr("fill", "#1F8AFF");
+          }
+          sentPath.attr("d", arc({
+            startAngle: -Math.PI / 2,
+            endAngle: -Math.PI / 2 + sentAngle
+          }));
+        } else {
+          sentPath.remove();
+        }
+        
+        // Update or create Received arc
+        let receivedPath = group.select("path.received-arc");
+        if (receivedValue > 0) {
+          if (receivedPath.empty()) {
+            receivedPath = group.append("path").attr("class", "received-arc").attr("fill", "white");
+          }
+          receivedPath.attr("d", arc({
+            startAngle: -Math.PI / 2 + sentAngle,
+            endAngle: -Math.PI / 2 + sentAngle + receivedAngle
+          }));
+        } else {
+          receivedPath.remove();
+        }
+      });
   }
 
   function zoom(event, d) {
@@ -237,6 +356,78 @@ async function createChart() {
       // Disabled counts box update on zoom
       // updateCountsBox();
     });
+  }
+
+  function accumulateWordCounts(map, words, type) {
+    if (!words) return;
+    words.forEach(([word, count]) => {
+      if (!word) return;
+      if (!map.has(word)) {
+        map.set(word, { Sent: 0, Received: 0 });
+      }
+      const entry = map.get(word);
+      const value = Number(count) || 0;
+      if (type === "Sent" || type === "Received") {
+        entry[type] += value;
+      } else {
+        entry.Sent += value;
+      }
+    });
+  }
+
+  function accumulateEmojiCounts(map, emoji, type) {
+    if (!emoji) return;
+    let symbol;
+    let count;
+    if (Array.isArray(emoji) && emoji.length >= 1) {
+      symbol = emoji[0];
+      count = Number(emoji[1]) || 1;
+    } else {
+      symbol = emoji;
+      count = 1;
+    }
+    if (symbol) {
+      if (!map.has(symbol)) {
+        map.set(symbol, { Sent: 0, Received: 0 });
+      }
+      const entry = map.get(symbol);
+      if (type === "Sent" || type === "Received") {
+        entry[type] += count;
+      } else {
+        entry.Sent += count;
+      }
+    }
+  }
+
+  function appendStackedBarLabels(barSelection, xScale, labelWidth, barHeight) {
+    const padding = 6;
+    barSelection.append("text")
+      .attr("class", "bar-label")
+      .attr("y", barHeight / 2)
+      .attr("dy", "0.35em")
+      .style("font", "10px monospace")
+      .style("pointer-events", "none")
+      .text(d => d.total)
+      .each(function(d) {
+        const text = d3.select(this);
+        const labelText = text.text();
+        const estimatedTextWidth = labelText.length * 6;
+        const sentWidth = xScale(d.sent);
+        const receivedWidth = xScale(d.received);
+        const totalWidth = xScale(d.total);
+
+        if (receivedWidth >= estimatedTextWidth + padding) {
+          text
+            .attr("x", labelWidth + sentWidth + receivedWidth - 3)
+            .attr("text-anchor", "end")
+            .style("fill", "#27380b");
+        } else {
+          text
+            .attr("x", labelWidth + totalWidth + 5)
+            .attr("text-anchor", "start")
+            .style("fill", "#27380b");
+        }
+      });
   }
 
   // Function to update counts box with common words and emoji for hovered node
@@ -282,78 +473,71 @@ async function createChart() {
     const headerHeight = lines.length * 18 + 20;
     const barChartStartY = headerHeight + 10;
 
-    // Aggregate common words/emoji based on node depth
-    let commonWords = d.data.common_words;
-    let commonEmoji = d.data.common_emoji;
+    // Aggregate common words/emoji based on node depth, keeping Sent vs Received counts
+    const wordCounts = new Map();
+    const emojiCounts = new Map();
     
     if (d.depth === 1 && d.children) {
       // Year node: aggregate from all person children and their sent/received children
-      const wordCounts = new Map();
-      const emojiCounts = new Map();
-      
       d.children.forEach(personChild => {
-        // Aggregate from person's sent/received children
         if (personChild.children) {
           personChild.children.forEach(sentReceivedChild => {
-            // Aggregate common words
-            if (sentReceivedChild.data.common_words) {
-              sentReceivedChild.data.common_words.forEach(([word, count]) => {
-                wordCounts.set(word, (wordCounts.get(word) || 0) + count);
-              });
-            }
-            // Aggregate emoji
-            if (sentReceivedChild.data.common_emoji) {
-              const emoji = Array.isArray(sentReceivedChild.data.common_emoji) ? sentReceivedChild.data.common_emoji[0] : sentReceivedChild.data.common_emoji;
-              const count = Array.isArray(sentReceivedChild.data.common_emoji) ? sentReceivedChild.data.common_emoji[1] : 1;
-              emojiCounts.set(emoji, (emojiCounts.get(emoji) || 0) + count);
-            }
+            const type = sentReceivedChild.data.name;
+            accumulateWordCounts(wordCounts, sentReceivedChild.data.common_words, type);
+            accumulateEmojiCounts(emojiCounts, sentReceivedChild.data.common_emoji, type);
           });
         }
       });
-      
-      commonWords = Array.from(wordCounts.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10);
-      
-      if (emojiCounts.size > 0) {
-        const topEmoji = Array.from(emojiCounts.entries())
-          .sort((a, b) => b[1] - a[1])[0];
-        commonEmoji = topEmoji;
-      }
     } else if (d.depth === 2 && d.children) {
       // Person node: aggregate common words/emoji from sent/received children
-      const wordCounts = new Map();
       d.children.forEach(child => {
-        if (child.data.common_words) {
-          child.data.common_words.forEach(([word, count]) => {
-            wordCounts.set(word, (wordCounts.get(word) || 0) + count);
-          });
-        }
+        const type = child.data.name;
+        accumulateWordCounts(wordCounts, child.data.common_words, type);
+        accumulateEmojiCounts(emojiCounts, child.data.common_emoji, type);
       });
-      commonWords = Array.from(wordCounts.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10);
-      
-      // Aggregate emoji from all children (take the most common one)
-      const emojiCounts = new Map();
-      d.children.forEach(child => {
-        if (child.data.common_emoji) {
-          const emoji = Array.isArray(child.data.common_emoji) ? child.data.common_emoji[0] : child.data.common_emoji;
-          const count = Array.isArray(child.data.common_emoji) ? child.data.common_emoji[1] : 1;
-          emojiCounts.set(emoji, (emojiCounts.get(emoji) || 0) + count);
-        }
-      });
-      if (emojiCounts.size > 0) {
-        const topEmoji = Array.from(emojiCounts.entries())
-          .sort((a, b) => b[1] - a[1])[0];
-        commonEmoji = topEmoji;
-      }
+    } else if (d.depth === 3) {
+      // Sent/Received node
+      accumulateWordCounts(wordCounts, d.data.common_words, d.data.name);
+      accumulateEmojiCounts(emojiCounts, d.data.common_emoji, d.data.name);
+    } else {
+      // Fallback for any other node type with direct common_words
+      accumulateWordCounts(wordCounts, d.data.common_words, "Sent");
+      accumulateEmojiCounts(emojiCounts, d.data.common_emoji, "Sent");
     }
 
-    // Show top 10 common words as bar chart if available
-    if (commonWords && commonWords.length > 0) {
-      const wordsData = commonWords.slice(0, 10);
-      const maxCount = d3.max(wordsData, d => d[1]);
+    const wordsData = Array.from(wordCounts.entries())
+      .map(([word, counts]) => {
+        const sent = counts.Sent || 0;
+        const received = counts.Received || 0;
+        return {
+          word,
+          sent,
+          received,
+          total: sent + received
+        };
+      })
+      .filter(d => d.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 15);
+
+    let topSentEmoji = null;
+    let topReceivedEmoji = null;
+    emojiCounts.forEach((counts, symbol) => {
+      if (counts.Sent > 0) {
+        if (!topSentEmoji || counts.Sent > topSentEmoji.count) {
+          topSentEmoji = { symbol, count: counts.Sent };
+        }
+      }
+      if (counts.Received > 0) {
+        if (!topReceivedEmoji || counts.Received > topReceivedEmoji.count) {
+          topReceivedEmoji = { symbol, count: counts.Received };
+        }
+      }
+    });
+
+    // Show stacked bar chart for common words if available
+    if (wordsData.length > 0) {
+      const maxCount = d3.max(wordsData, d => d.total);
       
       // Add "Common Words:" label
       countsText.append("tspan")
@@ -386,96 +570,73 @@ async function createChart() {
         .style("font", "10px monospace")
         .style("fill", "#27380b")
         .text(d => {
-          const word = d[0];
+          const word = d.word;
           return word.length > 8 ? word.substring(0, 7) + "…" : word;
         })
         .style("pointer-events", "none");
 
-      // Add bar rectangles (positioned after labels)
+      // Add Sent segment
       bars.append("rect")
         .attr("x", labelWidth)
-        .attr("width", d => xScale(d[1]))
+        .attr("width", d => xScale(d.sent))
         .attr("height", barHeight)
-        .attr("fill", "steelblue")
+        .attr("fill", "#1F8AFF")
         .attr("rx", 2)
         .attr("ry", 2);
 
-      // Add count labels - inside bar if it fits, otherwise to the right
-      bars.each(function(d) {
-        const barWidth = xScale(d[1]);
-        const countText = String(d[1]);
-        // Estimate text width: ~6px per character for 10px monospace font
-        const estimatedTextWidth = countText.length * 6;
-        const fitsInside = barWidth >= estimatedTextWidth + 6; // 6px padding
-        
-        const label = d3.select(this).append("text")
-          .attr("y", barHeight / 2)
-          .attr("dy", "0.35em")
-          .style("font", "10px monospace")
-          .text(countText)
-          .style("pointer-events", "none");
-        
-        if (fitsInside) {
-          // Inside bar, right-aligned, white
-          label.attr("x", labelWidth + barWidth - 3)
-            .attr("text-anchor", "end")
-            .style("fill", "white");
-        } else {
-          // Outside bar, to the right, dark
-          label.attr("x", labelWidth + barWidth + 5)
-            .attr("text-anchor", "start")
-            .style("fill", "#27380b");
-        }
-      });
+      // Add Received segment
+      bars.append("rect")
+        .attr("x", d => labelWidth + xScale(d.sent))
+        .attr("width", d => xScale(d.received))
+        .attr("height", barHeight)
+        .attr("fill", "#efefef")
+        .attr("rx", 2)
+        .attr("ry", 2);
 
-      const emojiStartY = barChartStartY + 20 + wordsData.length * (barHeight + barSpacing) + 25;
-      
-      // Show common emoji if available
-      if (commonEmoji) {
-        if (Array.isArray(commonEmoji) && commonEmoji.length >= 2) {
-          // If emoji and count array
-          countsText.append("tspan")
-            .attr("x", 10)
-            .attr("y", emojiStartY)
-            .text(`Emoji: ${commonEmoji[0]} (${commonEmoji[1]})`);
-        } else if (typeof commonEmoji === 'string') {
-          // If just emoji string
-          countsText.append("tspan")
-            .attr("x", 10)
-            .attr("y", emojiStartY)
-            .text(`Emoji: ${commonEmoji}`);
-        }
-      } else {
-        countsText.append("tspan")
-          .attr("x", 10)
-          .attr("y", emojiStartY)
-          .text("No emoji");
-      }
+      appendStackedBarLabels(bars, xScale, labelWidth, barHeight);
+
+      const emojiLabelY = barChartStartY + 20 + wordsData.length * (barHeight + barSpacing) + 25;
+      const emojiSentY = emojiLabelY + 18;
+      const emojiReceivedY = emojiSentY + 18;
+
+      countsText.append("tspan")
+        .attr("x", 10)
+        .attr("y", emojiLabelY)
+        .text("Most Common Emoji:");
+
+      countsText.append("tspan")
+        .attr("x", 10)
+        .attr("y", emojiSentY)
+        .text(topSentEmoji ? `Sent: ${topSentEmoji.symbol} (${topSentEmoji.count})` : "Sent: None");
+
+      countsText.append("tspan")
+        .attr("x", 10)
+        .attr("y", emojiReceivedY)
+        .text(topReceivedEmoji ? `Received: ${topReceivedEmoji.symbol} (${topReceivedEmoji.count})` : "Received: None");
     } else {
       countsText.append("tspan")
         .attr("x", 10)
         .attr("y", barChartStartY)
         .text("No common words");
       
-      // Show common emoji if available
-      if (commonEmoji) {
-        if (Array.isArray(commonEmoji) && commonEmoji.length >= 2) {
-          countsText.append("tspan")
-            .attr("x", 10)
-            .attr("y", barChartStartY + 18)
-            .text(`Emoji: ${commonEmoji[0]} (${commonEmoji[1]})`);
-        } else if (typeof commonEmoji === 'string') {
-          countsText.append("tspan")
-            .attr("x", 10)
-            .attr("y", barChartStartY + 18)
-            .text(`Emoji: ${commonEmoji}`);
-        }
-      } else {
-        countsText.append("tspan")
-          .attr("x", 10)
-          .attr("y", barChartStartY + 18)
-          .text("No emoji");
-      }
+      const emojiLabelY = barChartStartY + 18;
+      const emojiSentY = emojiLabelY + 18;
+      const emojiReceivedY = emojiSentY + 18;
+
+      countsText.append("tspan")
+        .attr("x", 10)
+        .attr("y", emojiLabelY)
+        .text("Most Common Emoji:");
+
+      countsText.append("tspan")
+        .attr("x", 10)
+        .attr("y", emojiSentY)
+        .text(topSentEmoji ? `Sent: ${topSentEmoji.symbol} (${topSentEmoji.count})` : "Sent: None");
+
+      countsText.append("tspan")
+        .attr("x", 10)
+        .attr("y", emojiReceivedY)
+        .text(topReceivedEmoji ? `Received: ${topReceivedEmoji.symbol} (${topReceivedEmoji.count})` : "Received: None");
     }
   }
 
@@ -496,31 +657,44 @@ async function createChart() {
         yearChild.children.forEach(personChild => {
           if (personChild.children) {
             personChild.children.forEach(sentReceivedChild => {
-              // Aggregate common words
-              if (sentReceivedChild.data.common_words) {
-                sentReceivedChild.data.common_words.forEach(([word, count]) => {
-                  wordCounts.set(word, (wordCounts.get(word) || 0) + count);
-                });
-              }
-              // Aggregate emoji
-              if (sentReceivedChild.data.common_emoji) {
-                const emoji = Array.isArray(sentReceivedChild.data.common_emoji) ? sentReceivedChild.data.common_emoji[0] : sentReceivedChild.data.common_emoji;
-                const count = Array.isArray(sentReceivedChild.data.common_emoji) ? sentReceivedChild.data.common_emoji[1] : 1;
-                emojiCounts.set(emoji, (emojiCounts.get(emoji) || 0) + count);
-              }
+              const type = sentReceivedChild.data.name;
+              accumulateWordCounts(wordCounts, sentReceivedChild.data.common_words, type);
+              accumulateEmojiCounts(emojiCounts, sentReceivedChild.data.common_emoji, type);
             });
           }
         });
       }
     });
     
-    const commonWords = Array.from(wordCounts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10);
+    const wordsData = Array.from(wordCounts.entries())
+      .map(([word, counts]) => {
+        const sent = counts.Sent || 0;
+        const received = counts.Received || 0;
+        return {
+          word,
+          sent,
+          received,
+          total: sent + received
+        };
+      })
+      .filter(d => d.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 15);
     
-    const commonEmoji = emojiCounts.size > 0
-      ? Array.from(emojiCounts.entries()).sort((a, b) => b[1] - a[1])[0]
-      : null;
+    let topSentEmoji = null;
+    let topReceivedEmoji = null;
+    emojiCounts.forEach((counts, symbol) => {
+      if (counts.Sent > 0) {
+        if (!topSentEmoji || counts.Sent > topSentEmoji.count) {
+          topSentEmoji = { symbol, count: counts.Sent };
+        }
+      }
+      if (counts.Received > 0) {
+        if (!topReceivedEmoji || counts.Received > topReceivedEmoji.count) {
+          topReceivedEmoji = { symbol, count: counts.Received };
+        }
+      }
+    });
     
     // Display header text
     lines.forEach((line, i) => {
@@ -534,9 +708,8 @@ async function createChart() {
     const barChartStartY = headerHeight + 10;
 
     // Show top 10 common words as bar chart if available
-    if (commonWords && commonWords.length > 0) {
-      const wordsData = commonWords.slice(0, 10);
-      const maxCount = d3.max(wordsData, d => d[1]);
+    if (wordsData.length > 0) {
+      const maxCount = d3.max(wordsData, d => d.total);
       
       // Add "Common Words:" label
       countsText.append("tspan")
@@ -569,94 +742,73 @@ async function createChart() {
         .style("font", "10px monospace")
         .style("fill", "#27380b")
         .text(d => {
-          const word = d[0];
+          const word = d.word;
           return word.length > 8 ? word.substring(0, 7) + "…" : word;
         })
         .style("pointer-events", "none");
 
-      // Add bar rectangles (positioned after labels)
+      // Add Sent segment
       bars.append("rect")
         .attr("x", labelWidth)
-        .attr("width", d => xScale(d[1]))
+        .attr("width", d => xScale(d.sent))
         .attr("height", barHeight)
-        .attr("fill", "steelblue")
+        .attr("fill", "#1F8AFF")
         .attr("rx", 2)
         .attr("ry", 2);
 
-      // Add count labels - inside bar if it fits, otherwise to the right
-      bars.each(function(d) {
-        const barWidth = xScale(d[1]);
-        const countText = String(d[1]);
-        // Estimate text width: ~6px per character for 10px monospace font
-        const estimatedTextWidth = countText.length * 6;
-        const fitsInside = barWidth >= estimatedTextWidth + 6; // 6px padding
-        
-        const label = d3.select(this).append("text")
-          .attr("y", barHeight / 2)
-          .attr("dy", "0.35em")
-          .style("font", "10px monospace")
-          .text(countText)
-          .style("pointer-events", "none");
-        
-        if (fitsInside) {
-          // Inside bar, right-aligned, white
-          label.attr("x", labelWidth + barWidth - 3)
-            .attr("text-anchor", "end")
-            .style("fill", "white");
-        } else {
-          // Outside bar, to the right, dark
-          label.attr("x", labelWidth + barWidth + 5)
-            .attr("text-anchor", "start")
-            .style("fill", "#27380b");
-        }
-      });
+      // Add Received segment
+      bars.append("rect")
+        .attr("x", d => labelWidth + xScale(d.sent))
+        .attr("width", d => xScale(d.received))
+        .attr("height", barHeight)
+        .attr("fill", "#efefef")
+        .attr("rx", 2)
+        .attr("ry", 2);
 
-      const emojiStartY = barChartStartY + 20 + wordsData.length * (barHeight + barSpacing) + 25;
-      
-      // Show common emoji if available
-      if (commonEmoji) {
-        if (Array.isArray(commonEmoji) && commonEmoji.length >= 2) {
-          countsText.append("tspan")
-            .attr("x", 10)
-            .attr("y", emojiStartY)
-            .text(`Emoji: ${commonEmoji[0]} (${commonEmoji[1]})`);
-        } else if (typeof commonEmoji === 'string') {
-          countsText.append("tspan")
-            .attr("x", 10)
-            .attr("y", emojiStartY)
-            .text(`Emoji: ${commonEmoji}`);
-        }
-      } else {
-        countsText.append("tspan")
-          .attr("x", 10)
-          .attr("y", emojiStartY)
-          .text("No emoji");
-      }
+      appendStackedBarLabels(bars, xScale, labelWidth, barHeight);
+
+      const emojiLabelY = barChartStartY + 20 + wordsData.length * (barHeight + barSpacing) + 25;
+      const emojiSentY = emojiLabelY + 18;
+      const emojiReceivedY = emojiSentY + 18;
+
+      countsText.append("tspan")
+        .attr("x", 10)
+        .attr("y", emojiLabelY)
+        .text("Most Common Emoji:");
+
+      countsText.append("tspan")
+        .attr("x", 10)
+        .attr("y", emojiSentY)
+        .text(topSentEmoji ? `Sent: ${topSentEmoji.symbol} (${topSentEmoji.count})` : "Sent: None");
+
+      countsText.append("tspan")
+        .attr("x", 10)
+        .attr("y", emojiReceivedY)
+        .text(topReceivedEmoji ? `Received: ${topReceivedEmoji.symbol} (${topReceivedEmoji.count})` : "Received: None");
     } else {
       countsText.append("tspan")
         .attr("x", 10)
         .attr("y", barChartStartY)
         .text("No common words");
       
-      // Show common emoji if available
-      if (commonEmoji) {
-        if (Array.isArray(commonEmoji) && commonEmoji.length >= 2) {
-          countsText.append("tspan")
-            .attr("x", 10)
-            .attr("y", barChartStartY + 18)
-            .text(`Emoji: ${commonEmoji[0]} (${commonEmoji[1]})`);
-        } else if (typeof commonEmoji === 'string') {
-          countsText.append("tspan")
-            .attr("x", 10)
-            .attr("y", barChartStartY + 18)
-            .text(`Emoji: ${commonEmoji}`);
-        }
-      } else {
-        countsText.append("tspan")
-          .attr("x", 10)
-          .attr("y", barChartStartY + 18)
-          .text("No emoji");
-      }
+      const emojiLabelY = barChartStartY + 18;
+      const emojiSentY = emojiLabelY + 18;
+      const emojiReceivedY = emojiSentY + 18;
+
+      countsText.append("tspan")
+        .attr("x", 10)
+        .attr("y", emojiLabelY)
+        .text("Most Common Emoji:");
+
+      countsText.append("tspan")
+        .attr("x", 10)
+        .attr("y", emojiSentY)
+        .text(topSentEmoji ? `Sent: ${topSentEmoji.symbol} (${topSentEmoji.count})` : "Sent: None");
+
+      countsText.append("tspan")
+        .attr("x", 10)
+        .attr("y", emojiReceivedY)
+        .text(topReceivedEmoji ? `Received: ${topReceivedEmoji.symbol} (${topReceivedEmoji.count})` : "Received: None");
     }
   }
 
@@ -671,12 +823,97 @@ async function createChart() {
   return svg.node();
 }
 
-createChart().then(svgNode => {
-  const container = document.getElementById('chart-container');
-  if (container && svgNode) {
-    container.appendChild(svgNode);
+let chartContainer = null;
+let currentSvgNode = null;
+let currentRenderToken = 0;
+
+async function renderChart(dataUrl) {
+  if (!chartContainer) return;
+  const token = ++currentRenderToken;
+
+  try {
+    const svgNode = await createChart(dataUrl);
+
+    if (token !== currentRenderToken) {
+      return;
+    }
+
+    if (currentSvgNode && currentSvgNode.parentNode === chartContainer) {
+      chartContainer.removeChild(currentSvgNode);
+    }
+
+    currentSvgNode = svgNode;
+    chartContainer.appendChild(svgNode);
+  } catch (error) {
+    console.error("Failed to render chart:", error);
   }
-});
+}
+
+function setupCommonWordsToggle() {
+  if (document.getElementById("exclude-common-words-toggle")) {
+    return document.getElementById("exclude-common-words-checkbox");
+  }
+
+  const toggleContainer = document.createElement("div");
+  toggleContainer.id = "exclude-common-words-toggle";
+  toggleContainer.style.position = "fixed";
+  toggleContainer.style.left = "20px";
+  toggleContainer.style.bottom = "20px";
+  toggleContainer.style.display = "flex";
+  toggleContainer.style.alignItems = "center";
+  toggleContainer.style.gap = "10px";
+  toggleContainer.style.padding = "10px 14px";
+  toggleContainer.style.background = "rgba(255, 255, 255, 0.9)";
+  toggleContainer.style.border = "1px solid #27380b";
+  toggleContainer.style.borderRadius = "6px";
+  toggleContainer.style.boxShadow = "0 2px 6px rgba(0, 0, 0, 0.15)";
+  toggleContainer.style.zIndex = "10";
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.id = "exclude-common-words-checkbox";
+
+  const label = document.createElement("label");
+  label.setAttribute("for", checkbox.id);
+  label.textContent = "Exclude common words";
+  label.style.fontFamily = "monospace";
+  label.style.fontSize = "14px";
+  label.style.color = "#27380b";
+
+  toggleContainer.appendChild(checkbox);
+  toggleContainer.appendChild(label);
+  document.body.appendChild(toggleContainer);
+
+  checkbox.addEventListener("change", () => {
+    const dataSource = checkbox.checked
+      ? "data/text_counts_no_common_words.json"
+      : "data/text_counts.json";
+    renderChart(dataSource);
+  });
+
+  return checkbox;
+}
+
+function initializeChart() {
+  chartContainer = document.getElementById("chart-container");
+  if (!chartContainer) {
+    console.warn("Chart container not found.");
+    return;
+  }
+
+  const toggleCheckbox = setupCommonWordsToggle();
+  if (toggleCheckbox) {
+    toggleCheckbox.checked = false;
+  }
+
+  renderChart("data/text_counts.json");
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initializeChart);
+} else {
+  initializeChart();
+}
 
 
 async function createWebsitesList() {
@@ -740,11 +977,11 @@ async function createWebsitesList() {
     .attr('height', y.bandwidth())
     .attr('fill', d => {
       if (d.base_url.includes('spotify')) {
-        return 'orange'; // same as dropdown spotify bars
+        return '#b8e5ff'; // same as dropdown spotify bars
       } else if (d.base_url.includes('youtu')) {
-        return 'orange'; // same as dropdown youtube bars
+        return '#b8e5ff'; // same as dropdown youtube bars
       } else {
-        return 'steelblue';
+        return '#1F8AFF';
       }
     })
     .style('cursor', d => (d.base_url.includes('spotify') || d.base_url.includes('youtu')) ? 'pointer' : 'default');
@@ -820,7 +1057,7 @@ async function createWebsitesList() {
       .attr('y', d => y(d[labelKey]))
       .attr('width', d => x(d.count))
       .attr('height', y.bandwidth())
-      .attr('fill', 'orange');
+      .attr('fill', '#b8e5ff');
 
     g.selectAll('text.count')
       .data(items)

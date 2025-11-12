@@ -8,18 +8,26 @@ from nltk.tokenize import word_tokenize
 nlp = spacy.load("en_core_web_sm")
 imsg_reaction_words = ["loved", "liked", "disliked", "laughed", "emphasized", "questioned", "reacted"]
 other_stop_words = ["im", "u", "ill", "na", "ur"]
-other_common_words = ["like", "lol", "lmao", "okay", "oh", "ok", "okie", "yes", "yeah"]
-stop_words = set(stopwords.words('english') + 
+
+# just some common words i eyeballed from the original data/chart that occur a lot
+# wanted to see how the data looked without them
+other_common_words = ["like", "lol", "lmao", "okay", "oh", "ok", "okie", "yes", "yeah", "yea", "good", "bc", "omg",
+                        "hi", "haha", "hello", "uh", "ah", "id", "ive", "thats", "gon", "wan", "got", "tho", "said"]
+STOP_WORDS = set(stopwords.words('english') + 
                  list(nlp.Defaults.stop_words) + 
-                 imsg_reaction_words + 
+                 imsg_reaction_words +
                  other_stop_words)
 
-def most_common_words(texts, get_all=False):
+def most_common_words(texts, get_all=False, remove_common_words=False):
     all_text = ' '.join(texts).lower().replace("'", ' ')
     cleaned_text = re.sub(r'[^\w\s]', '', all_text)
 
     # translator = str.maketrans('', '', string.punctuation)
     # cleaned_string = cleaned_text.translate(translator)
+
+    stop_words = STOP_WORDS
+    if remove_common_words:
+        stop_words = stop_words.union(other_common_words)
 
     word_tokens = word_tokenize(cleaned_text)
     words = [w for w in word_tokens if w not in stop_words and len(w.strip()) > 1]
@@ -27,7 +35,7 @@ def most_common_words(texts, get_all=False):
     if not words:
         return None
     c = Counter(words)
-    top_10 = c.most_common(10)
+    top_10 = c.most_common(15)
 
     # Find the most common word longer than 5 letters
     long_words = [word for word in words if len(word) > 5]
