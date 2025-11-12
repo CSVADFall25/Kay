@@ -1,3 +1,63 @@
+function setupSentReceivedLegend() {
+  if (document.getElementById("sent-received-legend")) {
+    return;
+  }
+
+  const legendContainer = document.createElement("div");
+  legendContainer.id = "sent-received-legend";
+  legendContainer.style.position = "fixed";
+  legendContainer.style.right = "20px";
+  legendContainer.style.bottom = "20px";
+  legendContainer.style.display = "flex";
+  legendContainer.style.flexDirection = "column";
+  legendContainer.style.gap = "6px";
+  legendContainer.style.padding = "10px 14px";
+  legendContainer.style.background = "rgba(255, 255, 255, 0.9)";
+  legendContainer.style.border = "1px solid #27380b";
+  legendContainer.style.borderRadius = "6px";
+  legendContainer.style.boxShadow = "0 2px 6px rgba(0, 0, 0, 0.15)";
+  legendContainer.style.fontFamily = "monospace";
+  legendContainer.style.fontSize = "13px";
+  legendContainer.style.color = "#27380b";
+  legendContainer.style.zIndex = "10";
+
+  const heading = document.createElement("div");
+  heading.textContent = "Message Counts";
+  heading.style.fontWeight = "600";
+  legendContainer.appendChild(heading);
+
+  const entries = [
+    { label: "Sent", color: "#1F8AFF" },
+    { label: "Received", color: "#efefef", border: "#27380b" }
+  ];
+
+  entries.forEach(entry => {
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.alignItems = "center";
+    row.style.gap = "8px";
+
+    const swatch = document.createElement("span");
+    swatch.style.display = "inline-block";
+    swatch.style.width = "14px";
+    swatch.style.height = "14px";
+    swatch.style.borderRadius = "3px";
+    swatch.style.background = entry.color;
+    if (entry.border) {
+      swatch.style.border = `1px solid ${entry.border}`;
+    }
+
+    const label = document.createElement("span");
+    label.textContent = entry.label;
+
+    row.appendChild(swatch);
+    row.appendChild(label);
+    legendContainer.appendChild(row);
+  });
+
+  document.body.appendChild(legendContainer);
+}
+
 async function createChart(dataUrl = "data/text_counts.json") {
 
   const response = await fetch(dataUrl);
@@ -10,7 +70,6 @@ async function createChart(dataUrl = "data/text_counts.json") {
   // Create the color scale.
   const color = d3.scaleLinear()
       .domain([0, 5])
-      //.range(["hsl(152,80%,80%)", "hsl(228,30%,40%)"])
       .range(["hsl(0, 0.00%, 100.00%)", "hsl(205, 62.10%, 44.50%)"])
       .interpolate(d3.interpolateHcl);
 
@@ -144,7 +203,7 @@ async function createChart(dataUrl = "data/text_counts.json") {
 
   // Append rect first so it is behind text
   label.append("rect")
-      .attr("fill", "rgb(79, 161, 101)")  // translucent background color for highlight
+      .attr("fill", "rgb(70, 108, 149)")  // translucent background color for highlight
       .attr("fill-opacity", 0.6)
       .attr("rx", 20)  // rounded corners
       .attr("ry", 20);
@@ -875,7 +934,7 @@ function setupCommonWordsToggle() {
 
   const label = document.createElement("label");
   label.setAttribute("for", checkbox.id);
-  label.textContent = "Exclude common words";
+  label.textContent = "Exclude common filler words (like, lol, lmao, etc.)";
   label.style.fontFamily = "monospace";
   label.style.fontSize = "14px";
   label.style.color = "#27380b";
@@ -905,6 +964,8 @@ function initializeChart() {
   if (toggleCheckbox) {
     toggleCheckbox.checked = false;
   }
+
+  setupSentReceivedLegend();
 
   renderChart("data/text_counts.json");
 }
