@@ -102,7 +102,13 @@ def text_counter(df):
         for year, people in years.groupby(level=1):
             year_obj = {"name": str(year), "children": [], "value": 0}
             for (s, y, person), count in people.items():
-                person_obj = {"name": person, "value": int(count)}
+                selected_info = df[((df["is_from_me"] == sent) & (df["year"] == year) & (df["first_name"] == person))]
+                common_words = most_common_words(selected_info["text"])
+                common_emoji = most_common_emoji(selected_info["text"])
+                person_obj = {"name": person,
+                              "value": int(count),
+                              "common_words": common_words,
+                              "common_emoji": common_emoji}
                 year_obj["children"].append(person_obj)
                 year_obj["value"] += int(count)
             sent_obj["children"].append(year_obj)

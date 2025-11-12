@@ -21,7 +21,7 @@ def most_common_words(texts, get_all=False):
     # cleaned_string = cleaned_text.translate(translator)
 
     word_tokens = word_tokenize(cleaned_text)
-    words = [w for w in word_tokens if w not in stop_words and w.strip() != '']
+    words = [w for w in word_tokens if w not in stop_words and len(w.strip()) > 1]
 
     if not words:
         return None
@@ -37,7 +37,7 @@ def most_common_words(texts, get_all=False):
         most_common_long_word = c_long.most_common(1)[0]
 
     if not get_all:
-        return top_10 + [most_common_long_word]
+        return top_10 # + [most_common_long_word]
     else:
         return c.most_common(100) # still just do 100 for brevity
 
@@ -68,3 +68,5 @@ def print_group_stats(grouped_df, group_name):
         common_emoji = most_common_emoji(texts)
         print(f"{group_name} {group_keys}: count={count}, most_common_words={common_word}, most_common_emoji={common_emoji}")
 
+def return_group_stats():
+    pass

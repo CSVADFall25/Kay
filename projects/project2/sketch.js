@@ -96,9 +96,9 @@ async function createChart() {
         const calculatedWidth = textLabel.length * charWidth;
         const bbox = this.getBBox();
         d3.select(this.parentNode).select("rect")
-          .attr("x", bbox.x - (4 * textLabel.length))
+          .attr("x", bbox.x - (3 * textLabel.length))
           .attr("y", bbox.y - 20)
-          .attr("width", bbox.width + (8 * textLabel.length)) // add some padding
+          .attr("width", bbox.width + (6 * textLabel.length)) // add some padding
           .attr("height", bbox.height + 50);
       });
 
