@@ -36,11 +36,12 @@ async function createChart() {
     .join("circle")
       .attr("fill", d => d.children ? color(d.depth) : "white")
       .attr("pointer-events", "all")
-      .style("cursor", d => (d.children && d.depth < 3) ? "pointer" : "default")
+      .style("cursor", d => (d.children && d.depth < 2) ? "pointer" : "default")
       .on("mouseover", function(event, d) {
         d3.select(this).attr("stroke", "#d6e8b7");
-        // Show common words and emoji in counts box for hovered person node
-        if (!d.children) {
+        // Show common words and emoji in counts box for hovered year (depth 1), person (depth 2), or sent/received node (depth 3)
+        // New hierarchy: Years > Names > Sent/Received
+        if (d.depth === 1 || d.depth === 2 || d.depth === 3) {
           updateCommonBox(d);
         }
       })
@@ -50,9 +51,10 @@ async function createChart() {
         clearCommonBox();
       })
       .on("click", (event, d) => {
-        // Only allow zooming if node has children and is not a person node (depth < 3)
-        // Person nodes are at depth 3 and have no children
-        if (d.children && d.depth < 3 && focus !== d) {
+        // Only allow zooming if node has children and is at year level or above (depth < 2)
+        // New hierarchy: Years > Names > Sent/Received
+        // Year nodes are at depth 1, person nodes at depth 2, sent/received at depth 3
+        if (d.children && d.depth < 2 && focus !== d) {
           zoom(event, d);
           event.stopPropagation();
         }
@@ -250,12 +252,21 @@ async function createChart() {
       pathNames.unshift(current.data.name);
       current = current.parent;
     }
-    // pathNames example: ["lifetime", "Sent", "2021", "Bhavi"]
-    // We want Sent/Received, year, person
+    // pathNames example: ["lifetime", "2021", "Bhavi", "Sent"]
+    // New hierarchy: Years > Names > Sent/Received
+    // We want Year, Person, Type (Sent/Received)
     if (pathNames.length >= 4) {
-      lines.push(`Type: ${pathNames[1]}`);
-      lines.push(`Year: ${pathNames[2]}`);
-      lines.push(`Person: ${pathNames[3]}`);
+      // Full path: lifetime > year > person > sent/received
+      lines.push(`Year: ${pathNames[1]}`);
+      lines.push(`Person: ${pathNames[2]}`);
+      lines.push(`Type: ${pathNames[3]}`);
+    } else if (pathNames.length >= 3) {
+      // Person node: lifetime > year > person
+      lines.push(`Year: ${pathNames[1]}`);
+      lines.push(`Person: ${pathNames[2]}`);
+    } else if (pathNames.length >= 2) {
+      // Year node: lifetime > year
+      lines.push(`Year: ${pathNames[1]}`);
     } else {
       lines.push(d.data.name);
     }
@@ -271,9 +282,77 @@ async function createChart() {
     const headerHeight = lines.length * 18 + 20;
     const barChartStartY = headerHeight + 10;
 
+    // Aggregate common words/emoji based on node depth
+    let commonWords = d.data.common_words;
+    let commonEmoji = d.data.common_emoji;
+    
+    if (d.depth === 1 && d.children) {
+      // Year node: aggregate from all person children and their sent/received children
+      const wordCounts = new Map();
+      const emojiCounts = new Map();
+      
+      d.children.forEach(personChild => {
+        // Aggregate from person's sent/received children
+        if (personChild.children) {
+          personChild.children.forEach(sentReceivedChild => {
+            // Aggregate common words
+            if (sentReceivedChild.data.common_words) {
+              sentReceivedChild.data.common_words.forEach(([word, count]) => {
+                wordCounts.set(word, (wordCounts.get(word) || 0) + count);
+              });
+            }
+            // Aggregate emoji
+            if (sentReceivedChild.data.common_emoji) {
+              const emoji = Array.isArray(sentReceivedChild.data.common_emoji) ? sentReceivedChild.data.common_emoji[0] : sentReceivedChild.data.common_emoji;
+              const count = Array.isArray(sentReceivedChild.data.common_emoji) ? sentReceivedChild.data.common_emoji[1] : 1;
+              emojiCounts.set(emoji, (emojiCounts.get(emoji) || 0) + count);
+            }
+          });
+        }
+      });
+      
+      commonWords = Array.from(wordCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+      
+      if (emojiCounts.size > 0) {
+        const topEmoji = Array.from(emojiCounts.entries())
+          .sort((a, b) => b[1] - a[1])[0];
+        commonEmoji = topEmoji;
+      }
+    } else if (d.depth === 2 && d.children) {
+      // Person node: aggregate common words/emoji from sent/received children
+      const wordCounts = new Map();
+      d.children.forEach(child => {
+        if (child.data.common_words) {
+          child.data.common_words.forEach(([word, count]) => {
+            wordCounts.set(word, (wordCounts.get(word) || 0) + count);
+          });
+        }
+      });
+      commonWords = Array.from(wordCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+      
+      // Aggregate emoji from all children (take the most common one)
+      const emojiCounts = new Map();
+      d.children.forEach(child => {
+        if (child.data.common_emoji) {
+          const emoji = Array.isArray(child.data.common_emoji) ? child.data.common_emoji[0] : child.data.common_emoji;
+          const count = Array.isArray(child.data.common_emoji) ? child.data.common_emoji[1] : 1;
+          emojiCounts.set(emoji, (emojiCounts.get(emoji) || 0) + count);
+        }
+      });
+      if (emojiCounts.size > 0) {
+        const topEmoji = Array.from(emojiCounts.entries())
+          .sort((a, b) => b[1] - a[1])[0];
+        commonEmoji = topEmoji;
+      }
+    }
+
     // Show top 10 common words as bar chart if available
-    if (d.data.common_words && d.data.common_words.length > 0) {
-      const wordsData = d.data.common_words.slice(0, 10);
+    if (commonWords && commonWords.length > 0) {
+      const wordsData = commonWords.slice(0, 10);
       const maxCount = d3.max(wordsData, d => d[1]);
       
       // Add "Common Words:" label
@@ -283,8 +362,8 @@ async function createChart() {
         .text("Common Words:");
 
       // Create scales for bar chart
-      const labelWidth = 70; // Width reserved for word labels
-      const barWidth = 110; // Width available for bars (200 - 20 padding - 70 label - some margin)
+      const labelWidth = 50; // Width reserved for word labels
+      const barWidth = 130; // Width available for bars (200 - 20 padding - 50 label - some margin)
       const barHeight = 12;
       const barSpacing = 2;
       const xScale = d3.scaleLinear()
@@ -321,33 +400,50 @@ async function createChart() {
         .attr("rx", 2)
         .attr("ry", 2);
 
-      // Add count labels inside bars (right-aligned, white)
-      bars.append("text")
-        .attr("x", d => labelWidth + xScale(d[1]) - 3)
-        .attr("y", barHeight / 2)
-        .attr("dy", "0.35em")
-        .attr("text-anchor", "end")
-        .style("font", "10px monospace")
-        .style("fill", "white")
-        .text(d => d[1])
-        .style("pointer-events", "none");
+      // Add count labels - inside bar if it fits, otherwise to the right
+      bars.each(function(d) {
+        const barWidth = xScale(d[1]);
+        const countText = String(d[1]);
+        // Estimate text width: ~6px per character for 10px monospace font
+        const estimatedTextWidth = countText.length * 6;
+        const fitsInside = barWidth >= estimatedTextWidth + 6; // 6px padding
+        
+        const label = d3.select(this).append("text")
+          .attr("y", barHeight / 2)
+          .attr("dy", "0.35em")
+          .style("font", "10px monospace")
+          .text(countText)
+          .style("pointer-events", "none");
+        
+        if (fitsInside) {
+          // Inside bar, right-aligned, white
+          label.attr("x", labelWidth + barWidth - 3)
+            .attr("text-anchor", "end")
+            .style("fill", "white");
+        } else {
+          // Outside bar, to the right, dark
+          label.attr("x", labelWidth + barWidth + 5)
+            .attr("text-anchor", "start")
+            .style("fill", "#27380b");
+        }
+      });
 
       const emojiStartY = barChartStartY + 20 + wordsData.length * (barHeight + barSpacing) + 25;
       
       // Show common emoji if available
-      if (d.data.common_emoji) {
-        if (Array.isArray(d.data.common_emoji) && d.data.common_emoji.length >= 2) {
+      if (commonEmoji) {
+        if (Array.isArray(commonEmoji) && commonEmoji.length >= 2) {
           // If emoji and count array
           countsText.append("tspan")
             .attr("x", 10)
             .attr("y", emojiStartY)
-            .text(`Emoji: ${d.data.common_emoji[0]} (${d.data.common_emoji[1]})`);
-        } else if (typeof d.data.common_emoji === 'string') {
+            .text(`Emoji: ${commonEmoji[0]} (${commonEmoji[1]})`);
+        } else if (typeof commonEmoji === 'string') {
           // If just emoji string
           countsText.append("tspan")
             .attr("x", 10)
             .attr("y", emojiStartY)
-            .text(`Emoji: ${d.data.common_emoji}`);
+            .text(`Emoji: ${commonEmoji}`);
         }
       } else {
         countsText.append("tspan")
@@ -362,17 +458,17 @@ async function createChart() {
         .text("No common words");
       
       // Show common emoji if available
-      if (d.data.common_emoji) {
-        if (Array.isArray(d.data.common_emoji) && d.data.common_emoji.length >= 2) {
+      if (commonEmoji) {
+        if (Array.isArray(commonEmoji) && commonEmoji.length >= 2) {
           countsText.append("tspan")
             .attr("x", 10)
             .attr("y", barChartStartY + 18)
-            .text(`Emoji: ${d.data.common_emoji[0]} (${d.data.common_emoji[1]})`);
-        } else if (typeof d.data.common_emoji === 'string') {
+            .text(`Emoji: ${commonEmoji[0]} (${commonEmoji[1]})`);
+        } else if (typeof commonEmoji === 'string') {
           countsText.append("tspan")
             .attr("x", 10)
             .attr("y", barChartStartY + 18)
-            .text(`Emoji: ${d.data.common_emoji}`);
+            .text(`Emoji: ${commonEmoji}`);
         }
       } else {
         countsText.append("tspan")
@@ -383,11 +479,194 @@ async function createChart() {
     }
   }
 
-  // Function to clear counts box text
-  function clearCommonBox() {
+  // Function to show all-time commonalities (aggregated from root)
+  function showAllTimeCommonalities() {
     countsText.selectAll("tspan").remove();
     barChartGroup.selectAll("*").remove();
+    
+    let lines = [];
+    lines.push("All Time");
+    
+    // Aggregate from all year nodes and their descendants
+    const wordCounts = new Map();
+    const emojiCounts = new Map();
+    
+    root.children.forEach(yearChild => {
+      if (yearChild.children) {
+        yearChild.children.forEach(personChild => {
+          if (personChild.children) {
+            personChild.children.forEach(sentReceivedChild => {
+              // Aggregate common words
+              if (sentReceivedChild.data.common_words) {
+                sentReceivedChild.data.common_words.forEach(([word, count]) => {
+                  wordCounts.set(word, (wordCounts.get(word) || 0) + count);
+                });
+              }
+              // Aggregate emoji
+              if (sentReceivedChild.data.common_emoji) {
+                const emoji = Array.isArray(sentReceivedChild.data.common_emoji) ? sentReceivedChild.data.common_emoji[0] : sentReceivedChild.data.common_emoji;
+                const count = Array.isArray(sentReceivedChild.data.common_emoji) ? sentReceivedChild.data.common_emoji[1] : 1;
+                emojiCounts.set(emoji, (emojiCounts.get(emoji) || 0) + count);
+              }
+            });
+          }
+        });
+      }
+    });
+    
+    const commonWords = Array.from(wordCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+    
+    const commonEmoji = emojiCounts.size > 0
+      ? Array.from(emojiCounts.entries()).sort((a, b) => b[1] - a[1])[0]
+      : null;
+    
+    // Display header text
+    lines.forEach((line, i) => {
+      countsText.append("tspan")
+        .attr("x", 10)
+        .attr("y", 20 + i * 18)
+        .text(line);
+    });
+
+    const headerHeight = lines.length * 18 + 20;
+    const barChartStartY = headerHeight + 10;
+
+    // Show top 10 common words as bar chart if available
+    if (commonWords && commonWords.length > 0) {
+      const wordsData = commonWords.slice(0, 10);
+      const maxCount = d3.max(wordsData, d => d[1]);
+      
+      // Add "Common Words:" label
+      countsText.append("tspan")
+        .attr("x", 10)
+        .attr("y", barChartStartY)
+        .text("Common Words:");
+
+      // Create scales for bar chart
+      const labelWidth = 50;
+      const barWidth = 130;
+      const barHeight = 12;
+      const barSpacing = 2;
+      const xScale = d3.scaleLinear()
+        .domain([0, maxCount])
+        .range([0, barWidth]);
+
+      // Create bars
+      const bars = barChartGroup.selectAll("g.bar")
+        .data(wordsData)
+        .enter()
+        .append("g")
+        .attr("class", "bar")
+        .attr("transform", (d, i) => `translate(10, ${barChartStartY + 20 + i * (barHeight + barSpacing)})`);
+
+      // Add word labels (truncate if too long)
+      bars.append("text")
+        .attr("x", 0)
+        .attr("y", barHeight / 2)
+        .attr("dy", "0.35em")
+        .style("font", "10px monospace")
+        .style("fill", "#27380b")
+        .text(d => {
+          const word = d[0];
+          return word.length > 8 ? word.substring(0, 7) + "…" : word;
+        })
+        .style("pointer-events", "none");
+
+      // Add bar rectangles (positioned after labels)
+      bars.append("rect")
+        .attr("x", labelWidth)
+        .attr("width", d => xScale(d[1]))
+        .attr("height", barHeight)
+        .attr("fill", "steelblue")
+        .attr("rx", 2)
+        .attr("ry", 2);
+
+      // Add count labels - inside bar if it fits, otherwise to the right
+      bars.each(function(d) {
+        const barWidth = xScale(d[1]);
+        const countText = String(d[1]);
+        // Estimate text width: ~6px per character for 10px monospace font
+        const estimatedTextWidth = countText.length * 6;
+        const fitsInside = barWidth >= estimatedTextWidth + 6; // 6px padding
+        
+        const label = d3.select(this).append("text")
+          .attr("y", barHeight / 2)
+          .attr("dy", "0.35em")
+          .style("font", "10px monospace")
+          .text(countText)
+          .style("pointer-events", "none");
+        
+        if (fitsInside) {
+          // Inside bar, right-aligned, white
+          label.attr("x", labelWidth + barWidth - 3)
+            .attr("text-anchor", "end")
+            .style("fill", "white");
+        } else {
+          // Outside bar, to the right, dark
+          label.attr("x", labelWidth + barWidth + 5)
+            .attr("text-anchor", "start")
+            .style("fill", "#27380b");
+        }
+      });
+
+      const emojiStartY = barChartStartY + 20 + wordsData.length * (barHeight + barSpacing) + 25;
+      
+      // Show common emoji if available
+      if (commonEmoji) {
+        if (Array.isArray(commonEmoji) && commonEmoji.length >= 2) {
+          countsText.append("tspan")
+            .attr("x", 10)
+            .attr("y", emojiStartY)
+            .text(`Emoji: ${commonEmoji[0]} (${commonEmoji[1]})`);
+        } else if (typeof commonEmoji === 'string') {
+          countsText.append("tspan")
+            .attr("x", 10)
+            .attr("y", emojiStartY)
+            .text(`Emoji: ${commonEmoji}`);
+        }
+      } else {
+        countsText.append("tspan")
+          .attr("x", 10)
+          .attr("y", emojiStartY)
+          .text("No emoji");
+      }
+    } else {
+      countsText.append("tspan")
+        .attr("x", 10)
+        .attr("y", barChartStartY)
+        .text("No common words");
+      
+      // Show common emoji if available
+      if (commonEmoji) {
+        if (Array.isArray(commonEmoji) && commonEmoji.length >= 2) {
+          countsText.append("tspan")
+            .attr("x", 10)
+            .attr("y", barChartStartY + 18)
+            .text(`Emoji: ${commonEmoji[0]} (${commonEmoji[1]})`);
+        } else if (typeof commonEmoji === 'string') {
+          countsText.append("tspan")
+            .attr("x", 10)
+            .attr("y", barChartStartY + 18)
+            .text(`Emoji: ${commonEmoji}`);
+        }
+      } else {
+        countsText.append("tspan")
+          .attr("x", 10)
+          .attr("y", barChartStartY + 18)
+          .text("No emoji");
+      }
+    }
   }
+
+  // Function to clear counts box text and restore all-time view
+  function clearCommonBox() {
+    showAllTimeCommonalities();
+  }
+
+  // Show all-time commonalities initially
+  showAllTimeCommonalities();
 
   return svg.node();
 }

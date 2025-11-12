@@ -78,8 +78,8 @@ def text_counter(df):
     #         year_obj["children"].append(month_obj)
     #     nested_counts.append(year_obj)
 
-    # Group by year, month, and name and count texts
-    grouped_counts = df.groupby(['is_from_me', 'year', 'first_name']).size()
+    # Group by year, name, and sent/received and count texts
+    grouped_counts = df.groupby(['year', 'first_name', 'is_from_me']).size()
     print("\nTexts sent and received per year and person:")
     print(grouped_counts)
     
@@ -94,27 +94,28 @@ def text_counter(df):
         1: "Sent", 0: "Received"
     }
     
-    # Convert daily_counts Series to nested dictionary with name/value objects and month names
+    # Convert daily_counts Series to nested dictionary with name/value objects
+    # Hierarchy: Years > Names > Sent/Received
     nested_counts = []
     total_value = 0
-    for sent, years in grouped_counts.groupby(level=0):
-        sent_obj = {"name": is_from_me[sent], "children": [], "value": 0}
-        for year, people in years.groupby(level=1):
-            year_obj = {"name": str(year), "children": [], "value": 0}
-            for (s, y, person), count in people.items():
-                selected_info = df[((df["is_from_me"] == sent) & (df["year"] == year) & (df["first_name"] == person))]
+    for year, people in grouped_counts.groupby(level=0):
+        year_obj = {"name": str(year), "children": [], "value": 0}
+        for person, sent_received in people.groupby(level=1):
+            person_obj = {"name": person, "children": [], "value": 0}
+            for (y, p, sent), count in sent_received.items():
+                selected_info = df[((df["year"] == year) & (df["first_name"] == person) & (df["is_from_me"] == sent))]
                 common_words = most_common_words(selected_info["text"])
                 common_emoji = most_common_emoji(selected_info["text"])
-                person_obj = {"name": person,
-                              "value": int(count),
-                              "common_words": common_words,
-                              "common_emoji": common_emoji}
-                year_obj["children"].append(person_obj)
-                year_obj["value"] += int(count)
-            sent_obj["children"].append(year_obj)
-            sent_obj["value"] += year_obj["value"]
-        nested_counts.append(sent_obj)
-        total_value += sent_obj["value"]
+                sent_received_obj = {"name": is_from_me[sent],
+                                     "value": int(count),
+                                     "common_words": common_words,
+                                     "common_emoji": common_emoji}
+                person_obj["children"].append(sent_received_obj)
+                person_obj["value"] += int(count)
+            year_obj["children"].append(person_obj)
+            year_obj["value"] += person_obj["value"]
+        nested_counts.append(year_obj)
+        total_value += year_obj["value"]
     
     # Save nested_counts to JSON file
     import json
