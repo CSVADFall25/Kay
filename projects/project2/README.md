@@ -18,6 +18,8 @@ I also later added an additional checkbox to filter out more common words, becau
 
 Reflection: In the future I think it would be cool to expand on this by going deeper into links/sites sent and exploring trends across other websites other than just Spotify and Youtube. I also think I could implement better language processing and word filtering, as mentioned above; even after extra filtering a lot of common word trends I see are still quite common words, and I think it would be interesting to explore unique words in conversations between different people or more nuanced differences across years. 
 
+Coming from a computer science background where I've done a lot of data visualization for research and presenting results, but not having done interactive visualizations, this was also a learning experience for exploring the limits of interactibility within charts. I had to think more about how I would want to explore and present the data in depth, rather than just presenting a variety of different static diagrams. 
+
 ## Requirements
 
 - MacOS in order to access messages and contact information databases.
