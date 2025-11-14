@@ -1,3 +1,8 @@
+"""
+Utility functions for natural language processing
+(Used to get most common words/emojis in texts)
+"""
+
 import re
 import spacy
 
@@ -7,7 +12,7 @@ from nltk.tokenize import word_tokenize
 
 nlp = spacy.load("en_core_web_sm")
 imsg_reaction_words = ["loved", "liked", "disliked", "laughed", "emphasized", "questioned", "reacted"]
-other_stop_words = ["im", "u", "ill", "na", "ur"]
+other_stop_words = ["im", "u", "ill", "na", "ur"] # random stop words I noticed appeared a lot and didn't get filtered out
 
 # just some common words i eyeballed from the original data/chart that occur a lot
 # wanted to see how the data looked without them
@@ -18,12 +23,10 @@ STOP_WORDS = set(stopwords.words('english') +
                  imsg_reaction_words +
                  other_stop_words)
 
+# return most common words in a group of texts
 def most_common_words(texts, get_all=False, remove_common_words=False):
     all_text = ' '.join(texts).lower().replace("'", ' ')
     cleaned_text = re.sub(r'[^\w\s]', '', all_text)
-
-    # translator = str.maketrans('', '', string.punctuation)
-    # cleaned_string = cleaned_text.translate(translator)
 
     stop_words = STOP_WORDS
     if remove_common_words:
@@ -37,19 +40,12 @@ def most_common_words(texts, get_all=False, remove_common_words=False):
     c = Counter(words)
     top_10 = c.most_common(15)
 
-    # Find the most common word longer than 5 letters
-    long_words = [word for word in words if len(word) > 5]
-    if not long_words:
-        most_common_long_word = None
-    else:
-        c_long = Counter(long_words)
-        most_common_long_word = c_long.most_common(1)[0]
-
     if not get_all:
-        return top_10 # + [most_common_long_word]
+        return top_10 
     else:
         return c.most_common(100) # still just do 100 for brevity
 
+# return most common emoji in a group of texts
 def most_common_emoji(texts):
     emoji_pattern = re.compile(
         "["
@@ -68,6 +64,7 @@ def most_common_emoji(texts):
         return None
     return Counter(emojis).most_common(1)[0]
 
+# gets most common words and emoji for a grouped dataframe
 def print_group_stats(grouped_df, group_name):
     print(f"\nStatistics for texts grouped by {group_name}:")
     for group_keys, group_data in grouped_df:
@@ -76,6 +73,3 @@ def print_group_stats(grouped_df, group_name):
         common_word = most_common_words(texts)
         common_emoji = most_common_emoji(texts)
         print(f"{group_name} {group_keys}: count={count}, most_common_words={common_word}, most_common_emoji={common_emoji}")
-
-def return_group_stats():
-    pass

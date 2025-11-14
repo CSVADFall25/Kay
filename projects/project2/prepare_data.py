@@ -1,3 +1,9 @@
+"""
+Reads text message data and extracts statistics/information I want to display:
+- Common words and emojis sent in each conversation (to/from each person) per year
+- Various links sent, to find common websites I've linked in text messages
+"""
+
 import re
 import csv
 import json
@@ -45,6 +51,12 @@ print(df.head())
 
 
 def text_counter(df, remove_common_words=False):
+    """
+    Group a dataframe and count common words and emojis for text groupings
+    This counts by year, and then by conversation/person
+    Saves the stats to a JSON file to be used by the d3 functions in the sketch
+    """
+
     # Group by year and count texts
     yearly_counts = df.groupby('year').size()
     print("\nTexts sent per year:")
@@ -55,41 +67,10 @@ def text_counter(df, remove_common_words=False):
     print("\nTexts sent per year and month:")
     print(monthly_counts)
 
-    # # Group by year, month, and name and count texts
-    # daily_counts = df.groupby(['year', 'month', 'name']).size()
-    # print("\nTexts sent per year, month, and day:")
-    # print(daily_counts)
-    
-    # # Month mapping
-    # month_names = {
-    #     1: "January", 2: "February", 3: "March", 4: "April",
-    #     5: "May", 6: "June", 7: "July", 8: "August",
-    #     9: "September", 10: "October", 11: "November", 12: "December"
-    # }
-    
-    # # Convert daily_counts Series to nested dictionary with name/value objects and month names
-    # nested_counts = []
-    # for year, months in daily_counts.groupby(level=0):
-    #     year_obj = {"name": str(year), "children": []}
-    #     for month, days in months.groupby(level=1):
-    #         month_obj = {"name": month_names.get(month, str(month)), "children": []}
-    #         for (y, m, day), count in days.items():
-    #             day_obj = {"name": str(day), "value": int(count)}
-    #             month_obj["children"].append(day_obj)
-    #         year_obj["children"].append(month_obj)
-    #     nested_counts.append(year_obj)
-
     # Group by year, name, and sent/received and count texts
     grouped_counts = df.groupby(['year', 'first_name', 'is_from_me']).size()
     print("\nTexts sent and received per year and person:")
     print(grouped_counts)
-    
-    # Month mapping
-    # month_names = {
-    #     1: "January", 2: "February", 3: "March", 4: "April",
-    #     5: "May", 6: "June", 7: "July", 8: "August",
-    #     9: "September", 10: "October", 11: "November", 12: "December"
-    # }
 
     is_from_me = {
         1: "Sent", 0: "Received"
@@ -149,13 +130,7 @@ df = df[df['is_from_me'] == 1] # only look at texts i've sent
 overall_common_word = most_common_words(df['text'], get_all=True)
 overall_common_emoji = most_common_emoji(df['text'])
 print(f"most_common_words={overall_common_word}, most_common_emoji={overall_common_emoji}")
-# text_counter(df[df['is_from_me'] == 1])
 
-
-# df.to_csv("data/clean_data.csv", index=False, quoting=csv.QUOTE_ALL)
-
-# Create a dataframe with only text messages that are links
-# link_pattern = r'(https?://[^\s]+)|(www\.[^\s]+)'
 # df_links = df[df['text'].str.contains('link_pattern, na=False, case=False, regex=True')]
 df_links = df[df['text'].str.contains('http')]
 print(len(df_links))
@@ -178,11 +153,6 @@ def get_base_url(url):
         return parsed_url.netloc.replace('www.', '')
     except Exception:
         return url  # fallback to original if parsing fails
-
-# def get_base_url(url):
-#     if "https" in url:
-#         return url.split("https://")[1].split("/")[0]
-#     return url.split("http://")[1].split("/")[0]
 
 base_urls = df_links['text'].apply(get_base_url)
 counts = base_urls.value_counts()

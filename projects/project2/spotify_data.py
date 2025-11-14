@@ -1,3 +1,8 @@
+"""
+Given a list of Spotify track links, queries the Spotify API to get track information
+Finds and saves the artists and the counts of how many songs per artist were linked
+"""
+
 import spotipy
 import pandas as pd
 
@@ -17,8 +22,6 @@ track_links = [link for link in track_links if is_track_link(link)]
 
 print(f"Found {len(track_links)} track links")
 
-
-# auth_manager = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
 
 sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=CLIENT_ID,
                                                            client_secret=CLIENT_SECRET,

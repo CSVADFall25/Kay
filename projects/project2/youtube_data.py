@@ -1,3 +1,8 @@
+"""
+Given a list of Youtube links, queries the Youtube API to get video titles
+Finds and saves common words in those video titles
+"""
+
 import pandas as pd
 
 import requests

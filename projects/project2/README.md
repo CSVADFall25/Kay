@@ -1,5 +1,9 @@
 # README
 
+## MacOS/Apple text message analysis
+
+![Screenshot](media/screenshot.png "Screenshot of data visualization view")
+
 ## Process, Reflection, and Outcomes
 
 I was curious about my texting data and also wanted to do some basic natural language processing/analysis on it, so I decided to go with text message data. It's not hollistically representative of all my conversations since there are other platforms like WhatsApp, Discord, etc that I exclusively talk to certain people on; it also only has texts stored from mid-2021 onward, but I figured it would be interesting to explore my texting trends nonetheless. 
@@ -31,3 +35,11 @@ Coming from a computer science background where I've done a lot of data visualiz
     - python3 -m pip install nltk
     - python3 -m pip install spacy
     - python3 -m spacy download en_core_web_sm
+
+## How to run
+
+1. `get_parse_data.py` to read from apple's database files
+2. `prepare_data.py` to do some extra filtering
+3. `spotify_data.py` and `youtube_data.py` to get extra spotify/youtube data
+4. run the sketch!
+

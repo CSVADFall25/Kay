@@ -1,3 +1,9 @@
+/**
+ * Creates and displays a fixed-position legend on the page that explains
+ * the color coding for "Sent" and "Received" message counts.
+ * The legend is styled as a small box with color swatches and labels.
+ * If the legend already exists in the DOM, it does nothing.
+ */
 function setupSentReceivedLegend() {
   if (document.getElementById("sent-received-legend")) {
     return;
@@ -58,6 +64,15 @@ function setupSentReceivedLegend() {
   document.body.appendChild(legendContainer);
 }
 
+/**
+ * Creates a packed circle chart visualization of message counts data.
+ * The chart shows hierarchical data with years, persons, and sent/received counts.
+ * Person nodes (depth 2) display pie chart arcs representing sent vs received proportions.
+ * Hovering nodes shows common words and emoji in a side counts box.
+ * Clicking zooms into year or person nodes.
+ * @param {string} dataUrl - URL to fetch JSON data for the chart.
+ * @returns {SVGElement} The SVG element containing the chart.
+ */
 async function createChart(dataUrl = "data/text_counts.json") {
 
   const response = await fetch(dataUrl);
@@ -67,13 +82,13 @@ async function createChart(dataUrl = "data/text_counts.json") {
   const width = 1000;
   const height = width;
 
-  // Create the color scale.
+  // Create the color scale for node fill based on depth.
   const color = d3.scaleLinear()
       .domain([0, 5])
       .range(["hsl(0, 0.00%, 100.00%)", "hsl(205, 62.10%, 44.50%)"])
       .interpolate(d3.interpolateHcl);
 
-  // Compute the layout.
+  // Compute the packed circle layout from hierarchical data.
   const pack = data => d3.pack()
       .size([width, height])
       .padding(3)
@@ -82,14 +97,14 @@ async function createChart(dataUrl = "data/text_counts.json") {
       .sort((a, b) => b.value - a.value));
   const root = pack(data);
 
-  // Create the SVG container.
+  // Create the SVG container with viewBox centered.
   const svg = d3.create("svg")
       .attr("viewBox", `-${width / 2} -${height / 2} ${width} ${height}`)
       .attr("width", width)
       .attr("height", height)
       .attr("style", `max-width: 100%; height: auto; display: block; margin: 0 -14px; background: ${color(0)}; cursor: pointer;`);
 
-  // Append the nodes - filter out depth 3 (sent/received) nodes
+  // Select nodes excluding depth 3 (sent/received leaf nodes).
   const nodeData = root.descendants().slice(1).filter(d => d.depth !== 3);
   const node = svg.append("g")
     .selectAll("g")
@@ -98,21 +113,21 @@ async function createChart(dataUrl = "data/text_counts.json") {
       .attr("pointer-events", "all")
       .style("cursor", d => (d.children && d.depth < 2) ? "pointer" : "default");
   
-  // Add base circle for all nodes
+  // Add base circle for all nodes, color depends on depth and children.
   node.append("circle")
       .attr("cx", 0)
       .attr("cy", 0)
       .attr("r", d => d.r)
       .attr("fill", d => {
         if (d.depth === 2 && d.children) {
-          // Person nodes will get pie chart coloring, use white as base
+          // Person nodes get white base for pie chart arcs.
           return "white";
         }
         return d.children ? color(d.depth) : "white";
       })
       .attr("pointer-events", "all");
   
-  // Add pie chart arcs for person nodes (depth 2)
+  // Add pie chart arcs for person nodes (depth 2) showing Sent vs Received proportions.
   node.filter(d => d.depth === 2 && d.children && d.children.length > 0)
     .each(function(d) {
       const group = d3.select(this);
@@ -130,14 +145,13 @@ async function createChart(dataUrl = "data/text_counts.json") {
       const sentAngle = (sentValue / total) * 2 * Math.PI;
       const receivedAngle = (receivedValue / total) * 2 * Math.PI;
       
-      // Create arc generator with fixed radius
+      // Arc generator for pie slices with radius equal to node radius.
       const radius = d.r;
       const arc = d3.arc()
         .innerRadius(0)
         .outerRadius(radius);
       
-      // Draw Sent arc (blue) - starts at top (12 o'clock)
-      // Arcs are positioned relative to group (0,0), group transform handles positioning
+      // Draw Sent arc (blue) starting at top (12 o'clock).
       if (sentValue > 0) {
         group.append("path")
           .attr("class", "sent-arc")
@@ -148,7 +162,7 @@ async function createChart(dataUrl = "data/text_counts.json") {
           .attr("fill", "#1F8AFF");
       }
       
-      // Draw Received arc (grey) - continues from Sent
+      // Draw Received arc (grey) continuing from Sent arc.
       if (receivedValue > 0) {
         group.append("path")
           .attr("class", "received-arc")
@@ -160,33 +174,30 @@ async function createChart(dataUrl = "data/text_counts.json") {
       }
     });
   
-  // Add event handlers to node groups
+  // Add event handlers for mouseover, mouseout, and click on nodes.
   node.on("mouseover", function(event, d) {
-        // Add stroke to the circle in this group
+        // Highlight circle stroke on hover.
         d3.select(this).select("circle").attr("stroke", "#d6e8b7");
-        // Show common words and emoji in counts box for hovered year (depth 1) or person (depth 2)
-        // New hierarchy: Years > Names > Sent/Received (sent/received not shown as bubbles)
+        // Show common words and emoji in counts box for year or person nodes.
         if (d.depth === 1 || d.depth === 2) {
           updateCommonBox(d);
         }
       })
       .on("mouseout", function(event, d) {
-        // Remove stroke from the circle
+        // Remove highlight stroke.
         d3.select(this).select("circle").attr("stroke", null);
-        // Clear counts box on mouse out
+        // Clear counts box on mouse out.
         clearCommonBox();
       })
       .on("click", (event, d) => {
-        // Only allow zooming if node has children and is at year level or above (depth < 2)
-        // New hierarchy: Years > Names > Sent/Received
-        // Year nodes are at depth 1, person nodes at depth 2
+        // Zoom only on nodes with children at year level or above (depth < 2).
         if (d.children && d.depth < 2 && focus !== d) {
           zoom(event, d);
           event.stopPropagation();
         }
       });
 
-  // Append the text labels with background boxes.
+  // Append text labels with background boxes for nodes.
   const label = svg.append("g")
       .style("font", "14px monospace")
       .attr("pointer-events", "none")
@@ -197,66 +208,62 @@ async function createChart(dataUrl = "data/text_counts.json") {
       .style("fill-opacity", d => d.parent === root ? 1 : 0)
       .style("display", d => d.parent === root ? "inline" : "none");
 
-  // Remove existing rect and text appends
+  // Remove any existing rect and text elements inside labels.
   label.selectAll("rect").remove();
   label.selectAll("text").remove();
 
-  // Append rect first so it is behind text
+  // Append translucent rounded rect behind text for highlight.
   label.append("rect")
-      .attr("fill", "rgb(70, 108, 149)")  // translucent background color for highlight
+      .attr("fill", "rgb(70, 108, 149)")
       .attr("fill-opacity", 0.6)
-      .attr("rx", 20)  // rounded corners
+      .attr("rx", 20)
       .attr("ry", 20);
 
-  // Append text after rect
+  // Append text elements with name and count for each node.
   label.append("text")
-      .style("fill", "#ffffff")  // text color
+      .style("fill", "#ffffff")
       .each(function(d) {
         const textElem = d3.select(this);
-        // Compute count for label
+        // Compute count for label, sum descendants if no direct value.
         let count = d.data.value;
         if (count === undefined) {
-          // Sum descendant leaf values if no direct value
           count = d.descendants().reduce((sum, node) => {
             if (!node.children) return sum + (node.data.value || 0);
             else return sum;
           }, 0);
         }
-        // Clear any existing tspans
+        // Clear existing tspans and append name and count on separate lines.
         textElem.selectAll("tspan").remove();
-        // Append name tspan
         textElem.append("tspan")
           .attr("x", 0)
           .attr("dy", "0em")
           .text(d.data.name);
-        // Append count tspan on new line
         textElem.append("tspan")
           .attr("x", 0)
           .attr("dy", "1.2em")
           .text(`(${count})`);
 
-        // Adjust background rect size after rendering
-        // Calculate width based on text length instead of bbox width
+        // Adjust background rect size based on text length.
         const textLabel = d.data.name + ` (${count})`;
-        const charWidth = 7; // approximate width of one character in pixels for monospace 14px font
-        const calculatedWidth = textLabel.length * charWidth;
+        const charWidth = 7; // Approximate width per character for monospace 14px font.
         const bbox = this.getBBox();
         d3.select(this.parentNode).select("rect")
           .attr("x", bbox.x - (3 * textLabel.length))
           .attr("y", bbox.y - 20)
-          .attr("width", bbox.width + (6 * textLabel.length)) // add some padding
+          .attr("width", bbox.width + (6 * textLabel.length))
           .attr("height", bbox.height + 50);
       });
 
-  // Declare focus and view before usage
+  // Variables to track current zoom focus and view.
   let focus = root;
   let view;
 
-  // Add cumulative counts box group in upper left corner
+  // Add a counts box group in the upper left corner for showing details.
   const countsBox = svg.append("g")
     .attr("class", "counts-box")
     .attr("transform", `translate(${-width / 2 + 20},${-height / 2 + 20})`);
 
+  // Background rectangle for counts box.
   countsBox.append("rect")
     .attr("width", 200)
     .attr("height", 440)
@@ -266,25 +273,30 @@ async function createChart(dataUrl = "data/text_counts.json") {
     .attr("rx", 6)
     .attr("ry", 6);
 
+  // Text element inside counts box for showing info.
   const countsText = countsBox.append("text")
     .attr("x", 10)
     .attr("y", 20)
     .style("font", "14px monospace")
     .style("fill", "#27380b");
 
-  // Create a group for the bar chart
+  // Group for bar chart inside counts box.
   const barChartGroup = countsBox.append("g")
     .attr("class", "bar-chart");
 
-  // Function to compute cumulative counts for a node
+  /**
+   * Computes cumulative Sent and Received counts for a given node.
+   * Recursively accumulates counts from leaf nodes based on hierarchy.
+   * @param {Object} node - The node to compute counts for.
+   * @returns {Object} Object with Sent and Received counts.
+   */
   function computeCounts(node) {
     if (!node) return { Sent: 0, Received: 0 };
     let counts = { Sent: 0, Received: 0 };
 
-    // Helper recursive function to accumulate counts
+    // Helper recursive function to accumulate counts.
     function accumulate(n) {
       if (!n.children) {
-        // Leaf node with value
         if (n.parent && n.parent.data.name === "Sent") {
           counts.Sent += n.data.value || 0;
         } else if (n.parent && n.parent.data.name === "Received") {
@@ -295,40 +307,41 @@ async function createChart(dataUrl = "data/text_counts.json") {
       }
     }
 
-    // If node is root "lifetime", accumulate all children
     if (node.data.name === "lifetime") {
       node.children.forEach(accumulate);
     } else if (node.data.name === "Sent" || node.data.name === "Received") {
-      // Accumulate all children of Sent or Received
       accumulate(node);
     } else {
-      // For other nodes, find if parent is Sent or Received and accumulate accordingly
       if (node.parent && node.parent.data.name === "Sent") {
         counts.Sent = node.data.value || 0;
       } else if (node.parent && node.parent.data.name === "Received") {
         counts.Received = node.data.value || 0;
       } else {
-        // For intermediate nodes, accumulate children
         accumulate(node);
       }
     }
     return counts;
   }
 
-  // Function to update counts box text based on current focus
+  // Placeholder function for updating counts box text (disabled).
   function updateCountsBox() {
     // Disabled to replace with common words/emoji on hover
   }
 
-  // Initial zoom and counts box update
+  // Initial zoom to root node and update counts box.
   zoomTo([focus.x, focus.y, focus.r * 2]);
   updateCountsBox();
 
-  // Create the zoom behavior and zoom immediately in to the initial focus node.
+  // Zoom behavior on SVG click to zoom out to root.
   svg.on("click", (event) => {
     zoom(event, root);
   });
 
+  /**
+   * Zooms the chart view to a specified position and scale.
+   * Updates node positions, circle radii, and pie chart arcs accordingly.
+   * @param {Array} v - Array [x, y, diameter] defining zoom focus and scale.
+   */
   function zoomTo(v) {
     const k = width / v[2];
 
@@ -336,9 +349,9 @@ async function createChart(dataUrl = "data/text_counts.json") {
 
     label.attr("transform", d => `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`);
     node.attr("transform", d => `translate(${(d.x - v[0]) * k},${(d.y - v[1]) * k})`);
-    // Update circle radius
     node.selectAll("circle").attr("r", d => d.r * k);
-    // Update arc paths for person nodes - need to recalculate with new radius
+
+    // Update pie chart arcs for person nodes with new radius.
     node.filter(d => d.depth === 2 && d.children && d.children.length > 0)
       .each(function(d) {
         const group = d3.select(this);
@@ -361,7 +374,6 @@ async function createChart(dataUrl = "data/text_counts.json") {
           .innerRadius(0)
           .outerRadius(radius);
         
-        // Update or create Sent arc
         let sentPath = group.select("path.sent-arc");
         if (sentValue > 0) {
           if (sentPath.empty()) {
@@ -375,7 +387,6 @@ async function createChart(dataUrl = "data/text_counts.json") {
           sentPath.remove();
         }
         
-        // Update or create Received arc
         let receivedPath = group.select("path.received-arc");
         if (receivedValue > 0) {
           if (receivedPath.empty()) {
@@ -391,6 +402,12 @@ async function createChart(dataUrl = "data/text_counts.json") {
       });
   }
 
+  /**
+   * Handles zoom transition to a new focus node.
+   * Animates zoom and updates label visibility.
+   * @param {Event} event - The triggering event.
+   * @param {Object} d - The node to zoom to.
+   */
   function zoom(event, d) {
     const focus0 = focus;
 
@@ -410,13 +427,18 @@ async function createChart(dataUrl = "data/text_counts.json") {
         .on("start", function(d) { if (d.parent === focus) this.style.display = "inline"; })
         .on("end", function(d) { if (d.parent !== focus) this.style.display = "none"; });
 
-    // Update counts box on zoom
+    // Disabled counts box update on zoom.
     transition.on("end", () => {
-      // Disabled counts box update on zoom
       // updateCountsBox();
     });
   }
 
+  /**
+   * Accumulates word counts into a map for Sent and Received types.
+   * @param {Map} map - Map to accumulate counts into.
+   * @param {Array} words - Array of [word, count] pairs.
+   * @param {string} type - "Sent" or "Received" or other.
+   */
   function accumulateWordCounts(map, words, type) {
     if (!words) return;
     words.forEach(([word, count]) => {
@@ -434,6 +456,12 @@ async function createChart(dataUrl = "data/text_counts.json") {
     });
   }
 
+  /**
+   * Accumulates emoji counts into a map for Sent and Received types.
+   * @param {Map} map - Map to accumulate counts into.
+   * @param {Array|string} emoji - Emoji data, either array [symbol, count] or string.
+   * @param {string} type - "Sent" or "Received" or other.
+   */
   function accumulateEmojiCounts(map, emoji, type) {
     if (!emoji) return;
     let symbol;
@@ -458,6 +486,14 @@ async function createChart(dataUrl = "data/text_counts.json") {
     }
   }
 
+  /**
+   * Appends labels showing total counts on stacked bar chart bars.
+   * Positions labels inside or outside bars based on space.
+   * @param {d3.Selection} barSelection - Selection of bar groups.
+   * @param {Function} xScale - Scale function for bar widths.
+   * @param {number} labelWidth - Width reserved for word labels.
+   * @param {number} barHeight - Height of each bar.
+   */
   function appendStackedBarLabels(barSelection, xScale, labelWidth, barHeight) {
     const padding = 6;
     barSelection.append("text")
@@ -489,39 +525,37 @@ async function createChart(dataUrl = "data/text_counts.json") {
       });
   }
 
-  // Function to update counts box with common words and emoji for hovered node
+  /**
+   * Updates the counts box with common words and emoji for the hovered node.
+   * Aggregates data based on node depth and displays stacked bar chart and emoji info.
+   * @param {Object} d - The hovered node.
+   */
   function updateCommonBox(d) {
     countsText.selectAll("tspan").remove();
     barChartGroup.selectAll("*").remove();
     
     let lines = [];
-    // Compose header line with Sent/Received, year, person
+    // Compose header line with Year, Person, and Type (Sent/Received) based on node path.
     let pathNames = [];
     let current = d;
     while (current) {
       pathNames.unshift(current.data.name);
       current = current.parent;
     }
-    // pathNames example: ["lifetime", "2021", "Bhavi", "Sent"]
-    // New hierarchy: Years > Names > Sent/Received
-    // We want Year, Person, Type (Sent/Received)
     if (pathNames.length >= 4) {
-      // Full path: lifetime > year > person > sent/received
       lines.push(`Year: ${pathNames[1]}`);
       lines.push(`Person: ${pathNames[2]}`);
       lines.push(`Type: ${pathNames[3]}`);
     } else if (pathNames.length >= 3) {
-      // Person node: lifetime > year > person
       lines.push(`Year: ${pathNames[1]}`);
       lines.push(`Person: ${pathNames[2]}`);
     } else if (pathNames.length >= 2) {
-      // Year node: lifetime > year
       lines.push(`Year: ${pathNames[1]}`);
     } else {
       lines.push(d.data.name);
     }
 
-    // Display header text
+    // Display header text lines.
     lines.forEach((line, i) => {
       countsText.append("tspan")
         .attr("x", 10)
@@ -532,12 +566,12 @@ async function createChart(dataUrl = "data/text_counts.json") {
     const headerHeight = lines.length * 18 + 20;
     const barChartStartY = headerHeight + 10;
 
-    // Aggregate common words/emoji based on node depth, keeping Sent vs Received counts
+    // Aggregate common words and emoji counts based on node depth.
     const wordCounts = new Map();
     const emojiCounts = new Map();
     
     if (d.depth === 1 && d.children) {
-      // Year node: aggregate from all person children and their sent/received children
+      // Year node: aggregate from all person children and their sent/received children.
       d.children.forEach(personChild => {
         if (personChild.children) {
           personChild.children.forEach(sentReceivedChild => {
@@ -548,22 +582,23 @@ async function createChart(dataUrl = "data/text_counts.json") {
         }
       });
     } else if (d.depth === 2 && d.children) {
-      // Person node: aggregate common words/emoji from sent/received children
+      // Person node: aggregate from sent/received children.
       d.children.forEach(child => {
         const type = child.data.name;
         accumulateWordCounts(wordCounts, child.data.common_words, type);
         accumulateEmojiCounts(emojiCounts, child.data.common_emoji, type);
       });
     } else if (d.depth === 3) {
-      // Sent/Received node
+      // Sent/Received node: accumulate directly.
       accumulateWordCounts(wordCounts, d.data.common_words, d.data.name);
       accumulateEmojiCounts(emojiCounts, d.data.common_emoji, d.data.name);
     } else {
-      // Fallback for any other node type with direct common_words
+      // Fallback: accumulate as Sent.
       accumulateWordCounts(wordCounts, d.data.common_words, "Sent");
       accumulateEmojiCounts(emojiCounts, d.data.common_emoji, "Sent");
     }
 
+    // Prepare data for top common words sorted by total count.
     const wordsData = Array.from(wordCounts.entries())
       .map(([word, counts]) => {
         const sent = counts.Sent || 0;
@@ -579,6 +614,7 @@ async function createChart(dataUrl = "data/text_counts.json") {
       .sort((a, b) => b.total - a.total)
       .slice(0, 15);
 
+    // Find top Sent and Received emoji by count.
     let topSentEmoji = null;
     let topReceivedEmoji = null;
     emojiCounts.forEach((counts, symbol) => {
@@ -594,26 +630,23 @@ async function createChart(dataUrl = "data/text_counts.json") {
       }
     });
 
-    // Show stacked bar chart for common words if available
+    // Display stacked bar chart for common words if available.
     if (wordsData.length > 0) {
       const maxCount = d3.max(wordsData, d => d.total);
       
-      // Add "Common Words:" label
       countsText.append("tspan")
         .attr("x", 10)
         .attr("y", barChartStartY)
         .text("Common Words:");
 
-      // Create scales for bar chart
-      const labelWidth = 50; // Width reserved for word labels
-      const barWidth = 130; // Width available for bars (200 - 20 padding - 50 label - some margin)
+      const labelWidth = 50;
+      const barWidth = 130;
       const barHeight = 12;
       const barSpacing = 2;
       const xScale = d3.scaleLinear()
         .domain([0, maxCount])
         .range([0, barWidth]);
 
-      // Create bars
       const bars = barChartGroup.selectAll("g.bar")
         .data(wordsData)
         .enter()
@@ -621,7 +654,6 @@ async function createChart(dataUrl = "data/text_counts.json") {
         .attr("class", "bar")
         .attr("transform", (d, i) => `translate(10, ${barChartStartY + 20 + i * (barHeight + barSpacing)})`);
 
-      // Add word labels (truncate if too long)
       bars.append("text")
         .attr("x", 0)
         .attr("y", barHeight / 2)
@@ -634,7 +666,6 @@ async function createChart(dataUrl = "data/text_counts.json") {
         })
         .style("pointer-events", "none");
 
-      // Add Sent segment
       bars.append("rect")
         .attr("x", labelWidth)
         .attr("width", d => xScale(d.sent))
@@ -643,7 +674,6 @@ async function createChart(dataUrl = "data/text_counts.json") {
         .attr("rx", 2)
         .attr("ry", 2);
 
-      // Add Received segment
       bars.append("rect")
         .attr("x", d => labelWidth + xScale(d.sent))
         .attr("width", d => xScale(d.received))
@@ -699,7 +729,10 @@ async function createChart(dataUrl = "data/text_counts.json") {
     }
   }
 
-  // Function to show all-time commonalities (aggregated from root)
+  /**
+   * Shows all-time common words and emoji aggregated from the root node.
+   * Clears and updates the counts box with overall data.
+   */
   function showAllTimeCommonalities() {
     countsText.selectAll("tspan").remove();
     barChartGroup.selectAll("*").remove();
@@ -707,7 +740,6 @@ async function createChart(dataUrl = "data/text_counts.json") {
     let lines = [];
     lines.push("All Time");
     
-    // Aggregate from all year nodes and their descendants
     const wordCounts = new Map();
     const emojiCounts = new Map();
     
@@ -755,7 +787,6 @@ async function createChart(dataUrl = "data/text_counts.json") {
       }
     });
     
-    // Display header text
     lines.forEach((line, i) => {
       countsText.append("tspan")
         .attr("x", 10)
@@ -766,17 +797,14 @@ async function createChart(dataUrl = "data/text_counts.json") {
     const headerHeight = lines.length * 18 + 20;
     const barChartStartY = headerHeight + 10;
 
-    // Show top 10 common words as bar chart if available
     if (wordsData.length > 0) {
       const maxCount = d3.max(wordsData, d => d.total);
       
-      // Add "Common Words:" label
       countsText.append("tspan")
         .attr("x", 10)
         .attr("y", barChartStartY)
         .text("Common Words:");
 
-      // Create scales for bar chart
       const labelWidth = 50;
       const barWidth = 130;
       const barHeight = 12;
@@ -785,7 +813,6 @@ async function createChart(dataUrl = "data/text_counts.json") {
         .domain([0, maxCount])
         .range([0, barWidth]);
 
-      // Create bars
       const bars = barChartGroup.selectAll("g.bar")
         .data(wordsData)
         .enter()
@@ -793,7 +820,6 @@ async function createChart(dataUrl = "data/text_counts.json") {
         .attr("class", "bar")
         .attr("transform", (d, i) => `translate(10, ${barChartStartY + 20 + i * (barHeight + barSpacing)})`);
 
-      // Add word labels (truncate if too long)
       bars.append("text")
         .attr("x", 0)
         .attr("y", barHeight / 2)
@@ -806,7 +832,6 @@ async function createChart(dataUrl = "data/text_counts.json") {
         })
         .style("pointer-events", "none");
 
-      // Add Sent segment
       bars.append("rect")
         .attr("x", labelWidth)
         .attr("width", d => xScale(d.sent))
@@ -815,7 +840,6 @@ async function createChart(dataUrl = "data/text_counts.json") {
         .attr("rx", 2)
         .attr("ry", 2);
 
-      // Add Received segment
       bars.append("rect")
         .attr("x", d => labelWidth + xScale(d.sent))
         .attr("width", d => xScale(d.received))
@@ -871,12 +895,14 @@ async function createChart(dataUrl = "data/text_counts.json") {
     }
   }
 
-  // Function to clear counts box text and restore all-time view
+  /**
+   * Clears the counts box and restores the all-time commonalities view.
+   */
   function clearCommonBox() {
     showAllTimeCommonalities();
   }
 
-  // Show all-time commonalities initially
+  // Show all-time commonalities initially.
   showAllTimeCommonalities();
 
   return svg.node();
@@ -886,6 +912,11 @@ let chartContainer = null;
 let currentSvgNode = null;
 let currentRenderToken = 0;
 
+/**
+ * Renders the chart SVG inside the chart container element.
+ * Uses a render token to avoid race conditions with async rendering.
+ * @param {string} dataUrl - URL to fetch data for the chart.
+ */
 async function renderChart(dataUrl) {
   if (!chartContainer) return;
   const token = ++currentRenderToken;
@@ -908,6 +939,11 @@ async function renderChart(dataUrl) {
   }
 }
 
+/**
+ * Sets up a fixed-position toggle checkbox to exclude common filler words
+ * from the chart data. When toggled, it re-renders the chart with filtered data.
+ * @returns {HTMLInputElement} The checkbox input element.
+ */
 function setupCommonWordsToggle() {
   if (document.getElementById("exclude-common-words-toggle")) {
     return document.getElementById("exclude-common-words-checkbox");
@@ -953,6 +989,10 @@ function setupCommonWordsToggle() {
   return checkbox;
 }
 
+/**
+ * Initializes the chart by setting up the container, toggle, legend,
+ * and rendering the initial chart.
+ */
 function initializeChart() {
   chartContainer = document.getElementById("chart-container");
   if (!chartContainer) {
@@ -970,15 +1010,20 @@ function initializeChart() {
   renderChart("data/text_counts.json");
 }
 
+// Initialize chart on DOM ready.
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", initializeChart);
 } else {
   initializeChart();
 }
 
-
+/**
+ * Creates and renders a horizontal bar chart list of top websites linked.
+ * Also fetches and prepares YouTube video topics and Spotify artists data
+ * for dropdown display on mouseover.
+ */
 async function createWebsitesList() {
-  // Helper function to parse CSV text into array of objects
+  // Helper function to parse CSV text into array of objects.
   function parseCSV(text) {
     const lines = text.trim().split('\n');
     const headers = lines[0].split(',');
@@ -992,18 +1037,18 @@ async function createWebsitesList() {
     });
   }
 
-  // Fetch and parse websites_linked.csv
+  // Fetch and parse websites_linked.csv.
   const websitesResponse = await fetch('data/websites_linked.csv');
   const websitesText = await websitesResponse.text();
   const websitesData = parseCSV(websitesText);
 
-  // Sort websites by count descending and take top 30
+  // Sort websites by count descending and take top 30.
   const topWebsites = websitesData
     .map(d => ({ base_url: d.base_url, count: +d.count }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 30);
 
-  // Render websites list as horizontal bar chart
+  // Render websites list as horizontal bar chart.
   const websitesList = d3.select('#websites-list');
   websitesList.html(''); // clear existing content
 
@@ -1057,7 +1102,7 @@ async function createWebsitesList() {
     .attr('dy', '0.3em')
     .text(d => d.count);
 
-  // Add y-axis labels (website names)
+  // Add y-axis labels (website names).
   svg.append('g')
     .attr('transform', `translate(${margin.left},0)`)
     .call(d3.axisLeft(y))
@@ -1065,7 +1110,7 @@ async function createWebsitesList() {
     .style('font-size', '12px')
     .style('cursor', 'pointer');
 
-  // Fetch and parse youtube_title_counts.csv
+  // Fetch and parse youtube_title_counts.csv.
   const youtubeResponse = await fetch('data/youtube_title_counts.csv');
   const youtubeText = await youtubeResponse.text();
   const youtubeData = parseCSV(youtubeText)
@@ -1073,7 +1118,7 @@ async function createWebsitesList() {
     .sort((a, b) => b.count - a.count)
     .slice(0, 30);
 
-  // Fetch and parse spotify_artists.csv
+  // Fetch and parse spotify_artists.csv.
   const spotifyResponse = await fetch('data/spotify_artists.csv');
   const spotifyText = await spotifyResponse.text();
   const spotifyData = parseCSV(spotifyText)
@@ -1083,7 +1128,12 @@ async function createWebsitesList() {
 
   const dropdown = d3.select('#dropdown-container');
 
-  // Helper to show dropdown as horizontal bar chart
+  /**
+   * Shows a dropdown horizontal bar chart for given items.
+   * @param {Array} items - Data items to display.
+   * @param {string} labelKey - Key for label in items.
+   * @param {string} labelText - Header text for dropdown.
+   */
   function showDropdown(items, labelKey, labelText) {
     dropdown.style('display', 'block');
     dropdown.html('');
@@ -1137,12 +1187,12 @@ async function createWebsitesList() {
       .style('font-size', '12px');
   }
 
-  // Helper to hide dropdown
+  // Hides the dropdown content.
   function hideDropdown() {
     dropdown.html('');
   }
 
-  // Add mouseover and mouseout handlers for top two sites (YouTube and Spotify)
+  // Add mouseover and mouseout handlers for top two sites (YouTube and Spotify).
   svg.selectAll('rect')
     .on('mouseover', function(event, d) {
       if (d.base_url.includes('youtu')) {
@@ -1158,4 +1208,5 @@ async function createWebsitesList() {
     });
 }
 
+// Immediately invoke to create the websites list visualization.
 createWebsitesList();

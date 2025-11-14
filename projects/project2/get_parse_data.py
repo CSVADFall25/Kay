@@ -1,3 +1,8 @@
+"""
+Extract the data from the apple database files
+Do some basic cleaning/filtering and save parsed down data to CSVs
+"""
+
 import re
 import sqlite3
 import pandas as pd
