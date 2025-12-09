@@ -1,0 +1,3 @@
+[submodule "spotify_data_art"]
+	path = final_project/spotify_data_art
+	url = https://github.com/kkrachenfels/spotify_data_art
